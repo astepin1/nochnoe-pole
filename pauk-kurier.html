@@ -329,7 +329,8 @@
     player = {
       x: 300, y: GROUND_Y - 700, vx: 0, vy: 0,
       attached: false, anchor: null, ropeLen: 0,
-      facing: 1, anim: 0, swingPhase: 0, wallSlide: 0
+      facing: 1, anim: 0, swingPhase: 0, wallSlide: 0,
+      wallTouch: 0, clinging: false
     };
     carrying = false;
     camX = player.x - W / 2; camY = player.y - H / 2;
@@ -424,28 +425,66 @@
 
     // выбор лучшей точки крепления
     var facing = player.vx >= 0.5 ? 1 : (player.vx <= -0.5 ? -1 : player.facing);
+    var cands = candidateAnchors();
     var bestA = null, bestScore = -Infinity;
-    for (var i = 0; i < anchors.length; i++) {
-      var a = anchors[i];
+    for (var i = 0; i < cands.length; i++) {
+      var a = cands[i];
       var dx = a.x - player.x;
       var dy = a.y - player.y;
       var d = Math.hypot(dx, dy);
       if (d > WEB_RANGE || d < MIN_ROPE) continue;
-      if (dy > -30) continue;                       // якорь должен быть выше
+      // верхние точки — должны быть выше игрока; стены — почти на любой высоте
+      if (a.type === "top" && dy > -30) continue;
+      if (a.type === "wall" && dy > 70) continue;
       // предпочитаем направление движения
-      if (dx * facing < -80) continue;              // сильно позади — не берём
-      var toward = dx * facing;                      // насколько «вперёд»
-      var score = toward * 1.0 - dy * 0.7 - Math.abs(d - 380) * 0.5;
+      if (dx * facing < -90) continue;
+      var toward = dx * facing;
+      var score = toward * 1.0 - dy * 0.6 - Math.abs(d - 360) * 0.6;
+      if (a.type === "top") score += 40;             // верхние точки чуть предпочтительнее
       if (score > bestScore) { bestScore = score; bestA = a; }
     }
-    if (!bestA) { sndEmpty(); flashTask("Не за что зацепиться! 😅"); return; }
+    if (bestA) {
+      player.attached = true;
+      player.anchor = bestA;
+      player.ropeLen = Math.max(MIN_ROPE, dist(player.x, player.y, bestA.x, bestA.y));
+      sndShoot();
+      burst(bestA.x, bestA.y, "#e8f4ff", 6);
+      updateHUD();
+      return;
+    }
 
-    player.attached = true;
-    player.anchor = bestA;
-    player.ropeLen = Math.max(MIN_ROPE, dist(player.x, player.y, bestA.x, bestA.y));
-    sndShoot();
-    burst(bestA.x, bestA.y, "#e8f4ff", 6);
-    updateHUD();
+    // fallback: если рядом стена — цепляемся прямо в неё
+    if (player.wallTouch !== 0) {
+      var wallX = player.x + player.wallTouch * 12;
+      var wa = { x: wallX, y: player.y - 30, type: "wall" };
+      player.attached = true;
+      player.anchor = wa;
+      player.ropeLen = Math.max(MIN_ROPE, 60);
+      sndShoot();
+      burst(wa.x, wa.y, "#e8f4ff", 6);
+      updateHUD();
+      return;
+    }
+
+    sndEmpty(); flashTask("Не за что зацепиться! 😅");
+  }
+
+  // Все возможные точки крепления: верхушки зданий + точки на стенах
+  function candidateAnchors() {
+    var pts = [];
+    for (var i = 0; i < buildings.length; i++) {
+      var b = buildings[i];
+      // верхние точки
+      pts.push({ x: b.x + 8, y: b.y - 4, type: "top" });
+      pts.push({ x: b.x + b.w - 8, y: b.y - 4, type: "top" });
+      pts.push({ x: b.x + b.w / 2, y: b.y - 30, type: "top" });
+      // точки на левой и правой стенах (можно цепляться за стены!)
+      for (var y = b.y + 30; y < GROUND_Y - 20; y += 64) {
+        pts.push({ x: b.x + 6, y: y, type: "wall" });
+        pts.push({ x: b.x + b.w - 6, y: y, type: "wall" });
+      }
+    }
+    return pts;
   }
   function releaseWeb() {
     if (!player || !player.attached) return;
@@ -588,6 +627,7 @@
     }
 
     // ==== столкновения со зданиями ====
+    var touchingWall = 0;   // -1 левая стена, +1 правая стена, 0 нет
     for (var i = 0; i < buildings.length; i++) {
       var b = buildings[i];
       var px = p.x, py = p.y;
@@ -601,17 +641,32 @@
           if (p.vy > 0) p.vy = 0;
         } else if (dLeft < dRight) {
           p.x = b.x - 12;
-          if (p.vx > 0) p.vx = -p.vx * 0.4;
+          if (p.vx > 0) p.vx = -p.vx * 0.35;
+          touchingWall = -1;
         } else {
           p.x = b.x + b.w + 12;
-          if (p.vx < 0) p.vx = -p.vx * 0.4;
-        }
-        // прилипание к стене и отскок
-        if (p.vy > 0 && py > b.y + 40) {
-          p.vy = Math.min(p.vy, 220);   // скольжение по стене
+          if (p.vx < 0) p.vx = -p.vx * 0.35;
+          touchingWall = 1;
         }
         releaseWeb();
       }
+    }
+
+    // ==== прилипание к стенам (скольжение / удержание) ====
+    p.wallTouch = touchingWall;
+    if (touchingWall !== 0) {
+      // держим направление в сторону стены — паук цепляется и висит
+      var intoWall = (touchingWall === -1 && dir < -0.1) || (touchingWall === 1 && dir > 0.1);
+      if (intoWall) {
+        p.vy = Math.min(p.vy, 40);    // почти висит
+        p.clinging = true;
+        if (Math.random() < dt * 4) burst(p.x - touchingWall * 12, p.y, "#8fe0ff", 1);
+      } else {
+        if (p.vy > 180) p.vy = 180;   // иначе — медленно скользит
+        p.clinging = false;
+      }
+    } else {
+      p.clinging = false;
     }
 
     // ==== земля ====
@@ -812,17 +867,29 @@
 
   /* ---------- Якоря для паутины (тонкие точки) ---------- */
   function drawAnchors() {
-    for (var i = 0; i < anchors.length; i++) {
-      var a = anchors[i];
+    var cands = candidateAnchors();
+    for (var i = 0; i < cands.length; i++) {
+      var a = cands[i];
       if (a.x < camX - 40 || a.x > camX + W + 40) continue;
       var d = dist(player.x, player.y, a.x, a.y);
-      var inRange = d < WEB_RANGE && a.y < player.y - 30 && !player.attached;
-      ctx.globalAlpha = inRange ? 0.85 : 0.25;
-      ctx.fillStyle = inRange ? "#8fe0ff" : "#5a6a90";
-      ctx.beginPath(); ctx.arc(a.x, a.y, inRange ? 4 : 2.5, 0, Math.PI * 2); ctx.fill();
-      if (inRange) {
-        ctx.strokeStyle = "rgba(143,224,255,.4)"; ctx.lineWidth = 1;
-        ctx.beginPath(); ctx.arc(a.x, a.y, 8, 0, Math.PI * 2); ctx.stroke();
+      var reachable = d < WEB_RANGE && !player.attached;
+      if (a.type === "top") reachable = reachable && a.y < player.y - 30;
+      if (a.type === "wall") reachable = reachable && a.y < player.y + 70;
+      var show = reachable || d < WEB_RANGE * 0.6;
+      if (!show) continue;
+      ctx.globalAlpha = reachable ? 0.85 : 0.18;
+      if (a.type === "wall") {
+        // на стенах — маленькие «крючки», показываем только вблизи
+        if (d > WEB_RANGE * 0.75) continue;
+        ctx.fillStyle = reachable ? "#8fe0ff" : "#4a5a7a";
+        ctx.fillRect(a.x - 2, a.y - 3, 4, 6);
+      } else {
+        ctx.fillStyle = reachable ? "#ffd76e" : "#6a5a3a";
+        ctx.beginPath(); ctx.arc(a.x, a.y, reachable ? 4.5 : 2.5, 0, Math.PI * 2); ctx.fill();
+        if (reachable) {
+          ctx.strokeStyle = "rgba(255,215,110,.5)"; ctx.lineWidth = 1;
+          ctx.beginPath(); ctx.arc(a.x, a.y, 9, 0, Math.PI * 2); ctx.stroke();
+        }
       }
     }
     ctx.globalAlpha = 1;
