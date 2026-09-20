@@ -1,0 +1,849 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<title>3D Вторжение — пришельцы летят на тебя</title>
+<style>
+  * { box-sizing: border-box; }
+  html, body {
+    margin: 0; height: 100%; overflow: hidden;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    background: #02030a; color: #eaf0ff;
+    -webkit-user-select: none; user-select: none;
+  }
+  #game { display: flex; flex-direction: column; height: 100%; }
+
+  /* ====== Панель ====== */
+  #hud {
+    display: flex; align-items: center; gap: 16px;
+    padding: 8px 16px; font-size: 14px; z-index: 5;
+    background: rgba(8,12,26,.9);
+    border-bottom: 1px solid rgba(120,180,255,.18);
+    flex-wrap: wrap;
+  }
+  #hud .item { white-space: nowrap; }
+  #hud .label { opacity: .55; margin-right: 4px; }
+  #hud .val { font-weight: 700; font-variant-numeric: tabular-nums; }
+  #hud .spacer { flex: 1; }
+  #wave { color: #6ff0a8; font-weight: 700; }
+  #combo { color: #ffd84d; font-weight: 700; }
+  #shield { display: flex; gap: 3px; }
+  #shield .hp {
+    width: 16px; height: 12px; border-radius: 3px;
+    background: linear-gradient(180deg,#7fd4ff,#2e9be0);
+    box-shadow: 0 0 6px rgba(127,212,255,.7);
+    transition: all .2s;
+  }
+  #shield .hp.empty { background: rgba(255,255,255,.12); box-shadow: none; }
+
+  /* ====== Сцена ====== */
+  #arena {
+    position: relative; flex: 1; overflow: hidden;
+    cursor: none; touch-action: none; background: #02030a;
+  }
+  #view { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
+
+  /* Тревожная рамка, когда враг близко */
+  #danger {
+    position: absolute; inset: 0; pointer-events: none; z-index: 4; opacity: 0;
+    box-shadow: inset 0 0 120px rgba(255,40,40,.75);
+    transition: opacity .15s;
+  }
+  #danger.on { opacity: 1; animation: dpulse .6s infinite alternate; }
+  @keyframes dpulse { from { opacity: .35; } to { opacity: 1; } }
+
+  /* Красная вспышка урона */
+  #dmg {
+    position: absolute; inset: 0; pointer-events: none; z-index: 5;
+    background: radial-gradient(circle, transparent 35%, rgba(255,30,30,.6));
+    opacity: 0;
+  }
+  #dmg.on { animation: dmgFlash .5s; }
+  @keyframes dmgFlash { 0% { opacity: 1; } 100% { opacity: 0; } }
+
+  /* ====== Прицел ====== */
+  #crosshair {
+    position: absolute; width: 40px; height: 40px;
+    margin: -20px 0 0 -20px; pointer-events: none;
+    opacity: 0; transition: opacity .15s; z-index: 25;
+  }
+  #crosshair::before, #crosshair::after {
+    content: ""; position: absolute; background: #6fff9e;
+    box-shadow: 0 0 8px rgba(111,255,158,.9);
+  }
+  #crosshair::before { left: 50%; top: 0; width: 2px; height: 100%; margin-left: -1px; }
+  #crosshair::after  { top: 50%; left: 0; height: 2px; width: 100%; margin-top: -1px; }
+  #crosshair .ring {
+    position: absolute; inset: 6px; border: 2px solid rgba(111,255,158,.7);
+    border-radius: 50%;
+  }
+  #crosshair .dot {
+    position: absolute; left: 50%; top: 50%; width: 5px; height: 5px;
+    margin: -2.5px 0 0 -2.5px; border-radius: 50%; background: #6fff9e;
+  }
+  #crosshair.hot::before, #crosshair.hot::after { background: #ff4d6d; box-shadow: 0 0 10px rgba(255,77,109,1); }
+  #crosshair.hot .ring { border-color: #ff4d6d; }
+  #crosshair.hot .dot { background: #ff4d6d; }
+
+  /* ====== Оверлей ====== */
+  #overlay {
+    position: absolute; inset: 0; display: flex; align-items: center; justify-content: center;
+    background: rgba(2,4,12,.86); backdrop-filter: blur(6px); z-index: 30;
+    text-align: center; padding: 20px; overflow: auto;
+  }
+  #overlay.hidden { display: none; }
+  #overlay .card {
+    max-width: 560px; width: 100%; padding: 30px 28px; border-radius: 20px;
+    background: rgba(20,30,60,.55); border: 1px solid rgba(120,180,255,.22);
+    box-shadow: 0 20px 60px rgba(0,0,0,.7), 0 0 60px rgba(60,120,255,.15) inset;
+  }
+  #overlay h1 { margin: 0 0 6px; font-size: 36px; letter-spacing: .5px;
+    background: linear-gradient(90deg,#8dffb4,#7fd4ff,#c79bff);
+    -webkit-background-clip: text; background-clip: text; -webkit-text-fill-color: transparent; }
+  #overlay h2 { margin: 20px 0 8px; font-size: 17px; opacity: .9; }
+  #overlay p { margin: 8px 0; line-height: 1.55; opacity: .85; font-size: 14px; }
+  #overlay .big { font-size: 48px; font-weight: 800; color: #6fff9e; margin: 4px 0; }
+  #overlay button {
+    margin: 6px; padding: 14px 34px; font-size: 17px; font-weight: 700;
+    color: #04140a; background: linear-gradient(180deg,#8dffb4,#35e08a);
+    border: none; border-radius: 12px; cursor: pointer;
+    box-shadow: 0 8px 24px rgba(53,224,138,.35);
+    transition: transform .1s, box-shadow .15s;
+  }
+  #overlay button:hover { transform: translateY(-2px); box-shadow: 0 12px 28px rgba(53,224,138,.5); }
+  #overlay button:active { transform: translateY(1px) scale(.98); }
+  #overlay button.ghost {
+    background: rgba(255,255,255,.08); color: #eaf0ff; box-shadow: none;
+    border: 1px solid rgba(255,255,255,.18);
+  }
+  #overlay .row { display: flex; justify-content: center; gap: 24px; margin-top: 14px; flex-wrap: wrap; }
+  #overlay .row .col { opacity: .9; font-size: 13px; }
+  #overlay .row .col b { display: block; font-size: 24px; margin-top: 4px; color: #fff; }
+  .board { margin: 10px auto 0; max-width: 400px; }
+  .board .line {
+    display: flex; align-items: center; gap: 10px; padding: 7px 12px;
+    border-radius: 10px; font-size: 14px; margin-bottom: 5px;
+    background: rgba(255,255,255,.05);
+  }
+  .board .line.me { background: rgba(53,224,138,.18); border: 1px solid rgba(53,224,138,.4); }
+  .board .rank { width: 22px; text-align: center; opacity: .8; font-weight: 700; }
+  .board .m { flex: 1; text-align: left; opacity: .7; font-size: 12px; }
+  .board .s { font-weight: 800; color: #ffd84d; }
+  .legend { display: flex; justify-content: center; gap: 14px; flex-wrap: wrap; margin-top: 14px; font-size: 12px; opacity: .9; }
+  .legend span { display: inline-flex; align-items: center; gap: 5px; }
+  .legend b { font-size: 16px; }
+</style>
+</head>
+<body>
+  <div id="game">
+    <div id="hud">
+      <div class="item"><span class="label">Очки:</span><span class="val" id="score">0</span></div>
+      <div class="item"><span class="label">Волна:</span><span id="wave">1</span></div>
+      <div class="item"><span class="label">Щит:</span><span id="shield"></span></div>
+      <div class="item" id="combo"></div>
+      <div class="spacer"></div>
+      <div class="item"><span class="label">Рекорд:</span><span class="val" id="best">0</span></div>
+    </div>
+
+    <div id="arena">
+      <canvas id="view"></canvas>
+      <div id="danger"></div>
+      <div id="dmg"></div>
+      <div id="crosshair"><span class="ring"></span><span class="dot"></span></div>
+      <div id="overlay"></div>
+    </div>
+  </div>
+
+<script>
+(function () {
+  "use strict";
+
+  /* ================= НАСТРОЙКИ ================= */
+  var START_HP   = 5;     // прочность щита
+  var FAR        = 1400;  // откуда появляются пришельцы (дальность)
+  var NEAR       = 105;   // на каком расстоянии атакуют
+  var BASE_SPEED = 120;   // скорость полёта к вам (ед/сек)
+  var SPEED_WAVE = 20;    // ускорение за волну
+  var BASE_SPAWN = 1150;  // пауза между врагами, мс
+  var MIN_SPAWN  = 380;
+  /* ============================================= */
+
+  var arena     = document.getElementById("arena");
+  var canvas    = document.getElementById("view");
+  var ctx       = canvas.getContext("2d");
+  var overlay   = document.getElementById("overlay");
+  var dangerEl  = document.getElementById("danger");
+  var dmgEl     = document.getElementById("dmg");
+  var crosshair = document.getElementById("crosshair");
+  var scoreEl   = document.getElementById("score");
+  var waveEl    = document.getElementById("wave");
+  var shieldEl  = document.getElementById("shield");
+  var comboEl   = document.getElementById("combo");
+  var bestEl    = document.getElementById("best");
+
+  var W = 0, H = 0, DPR = 1, FOCAL = 800;
+
+  function resize() {
+    var r = arena.getBoundingClientRect();
+    W = r.width; H = r.height;
+    DPR = Math.min(window.devicePixelRatio || 1, 2);
+    canvas.width = Math.round(W * DPR);
+    canvas.height = Math.round(H * DPR);
+    ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
+    FOCAL = Math.max(500, W * 1.05);
+  }
+
+  /* ---------- Состояние ---------- */
+  var running = false;
+  var score = 0, hp = START_HP, wave = 1, combo = 0, maxCombo = 0;
+  var killed = 0, escaped = 0, shots = 0, hits = 0;
+  var waveKills = 0, waveKillsNeeded = 8;
+  var aliens = [], stars = [], fx = [], floats = [];
+  var spawnTimer = null, rafId = null, lastTs = 0;
+  var mouseX = 0, mouseY = 0, hasMouse = false;
+  var yaw = 0, pitch = 0;                 // поворот камеры (параллакс)
+  var shakeUntil = 0;
+
+  function loadBoard() {
+    try { return JSON.parse(localStorage.getItem("alien3d_board") || "[]"); }
+    catch (e) { return []; }
+  }
+  function saveBoard(b) { localStorage.setItem("alien3d_board", JSON.stringify(b)); }
+  var best = loadBoard().length ? loadBoard()[0].score : 0;
+  bestEl.textContent = best;
+
+  /* ---------- Звук ---------- */
+  var audioCtx = null;
+  function getAudio() {
+    if (!audioCtx) {
+      var AC = window.AudioContext || window.webkitAudioContext;
+      if (AC) audioCtx = new AC();
+    }
+    if (audioCtx && audioCtx.state === "suspended") audioCtx.resume();
+    return audioCtx;
+  }
+  function tone(freq, to, dur, type, vol) {
+    var ac = getAudio(); if (!ac) return;
+    var t = ac.currentTime;
+    var o = ac.createOscillator(); o.type = type || "sine";
+    o.frequency.setValueAtTime(freq, t);
+    if (to) o.frequency.exponentialRampToValueAtTime(to, t + dur);
+    var g = ac.createGain();
+    g.gain.setValueAtTime(vol || 0.2, t);
+    g.gain.exponentialRampToValueAtTime(0.001, t + dur * 1.1);
+    o.connect(g); g.connect(ac.destination);
+    o.start(t); o.stop(t + dur * 1.2);
+  }
+  function sndLaser()  { tone(1500, 480, 0.07, "square", 0.07); }
+  function sndKill()   { tone(480, 1100, 0.12, "triangle", 0.2); }
+  function sndTank()   { tone(280, 170, 0.14, "sawtooth", 0.18); }
+  function sndUfo()    { tone(900, 1600, 0.12, "square", 0.16); setTimeout(function(){ tone(1300,2000,.12,"square",.13); }, 90); }
+  function sndDamage() { tone(190, 55, 0.45, "sawtooth", 0.32); }
+  function sndWave()   { tone(600, 1200, 0.18, "triangle", 0.2); setTimeout(function(){ tone(900,1500,.18,"triangle",.18); }, 140); }
+  function sndOver()   { tone(420, 70, 0.9, "sawtooth", 0.32); }
+
+  /* ---------- Утилиты ---------- */
+  function rand(a, b) { return Math.random() * (b - a) + a; }
+  function clamp(v, a, b) { return v < a ? a : (v > b ? b : v); }
+  function accuracy() { return shots === 0 ? 0 : Math.round(hits / shots * 100); }
+
+  /* ============ 3D: проекция точки мира на экран ============ */
+  // Камера в начале координат, смотрит в +Z. Возвращает экранные координаты и масштаб.
+  function project(x, y, z) {
+    // поворот (yaw) вокруг Y
+    var cy = Math.cos(yaw), sy = Math.sin(yaw);
+    var x1 = x * cy - z * sy;
+    var z1 = x * sy + z * cy;
+    // наклон (pitch) вокруг X
+    var cp = Math.cos(pitch), sp = Math.sin(pitch);
+    var y1 = y * cp - z1 * sp;
+    var z2 = y * sp + z1 * cp;
+    if (z2 < 1) z2 = 1;
+    var s = FOCAL / z2;
+    return { sx: W / 2 + x1 * s, sy: H * 0.52 - y1 * s, s: s, z: z2 };
+  }
+
+  /* ---------- Звёзды (туннель) ---------- */
+  function buildStars() {
+    stars = [];
+    for (var i = 0; i < 150; i++) {
+      stars.push({
+        x: rand(-900, 900), y: rand(-500, 700), z: rand(NEAR, FAR),
+        b: rand(0.3, 1)
+      });
+    }
+  }
+
+  /* ---------- Создание пришельца ---------- */
+  function spawnAlien() {
+    if (!running) return;
+
+    var r = Math.random();
+    var kind = "normal";
+    var scoutChance = 0.12 + wave * 0.03;
+    var tankChance  = 0.08 + wave * 0.03;
+    var ufoChance   = 0.05 + wave * 0.012;
+    if (r < scoutChance) kind = "scout";
+    else if (r < scoutChance + tankChance) kind = "tank";
+    else if (r < scoutChance + tankChance + ufoChance) kind = "ufo";
+
+    var world = kind === "tank" ? rand(90, 120) : (kind === "scout" ? rand(55, 70) : rand(70, 95));
+    var speed = (BASE_SPEED + (wave - 1) * SPEED_WAVE) *
+                (kind === "scout" ? 1.8 : (kind === "tank" ? 0.7 : 1)) * rand(0.85, 1.2);
+
+    var half = FAR * W / (2 * FOCAL);
+    var a = {
+      kind: kind,
+      x: rand(-half * 0.85, half * 0.85),
+      y: rand(-180, 320),
+      z: FAR * rand(0.92, 1.1),
+      world: world,
+      speed: speed,
+      hp: kind === "tank" ? 3 : 1,
+      maxHp: kind === "tank" ? 3 : 1,
+      pts: (kind === "ufo" ? 150 : kind === "scout" ? 100 : kind === "tank" ? 60 : 30) + (wave - 1) * 5,
+      swayPhase: rand(0, Math.PI * 2),
+      swaySpeed: rand(0.6, 1.6),
+      swayAmp: rand(20, 70),
+      dead: false,
+      hitFlash: 0
+    };
+    aliens.push(a);
+
+    var delay = Math.max(MIN_SPAWN, BASE_SPAWN - (wave - 1) * 75) * rand(0.7, 1.35);
+    spawnTimer = setTimeout(spawnAlien, delay);
+  }
+
+  /* ---------- Рисование пришельца (billboard) ---------- */
+  function drawAlien(a, p) {
+    var r = a.world * p.s * 0.5;           // радиус в пикселях
+    if (r < 1) return;
+
+    // туман: далёкие — бледнее
+    var fog = clamp(1 - (p.z - NEAR) / (FAR * 1.1), 0.25, 1);
+    var alpha = fog;
+    var danger = clamp(1 - (p.z - NEAR) / 500, 0, 1);
+
+    ctx.save();
+    ctx.translate(p.sx, p.sy);
+    ctx.globalAlpha = alpha;
+
+    var col, col2;
+    if (a.kind === "scout") { col = "#d9c22a"; col2 = "#f5e66a"; }
+    else if (a.kind === "tank") { col = "#e05252"; col2 = "#f58a8a"; }
+    else if (a.kind === "ufo") { col = "#8b5cf6"; col2 = "#c4b5fd"; }
+    else { col = "#4bd06a"; col2 = "#7ff09a"; }
+
+    // свечение
+    ctx.shadowColor = danger > 0.5 ? "rgba(255,60,60,.9)" : col;
+    ctx.shadowBlur = r * (0.5 + danger);
+
+    if (a.kind === "ufo") {
+      // тарелка
+      ctx.fillStyle = col;
+      ctx.beginPath(); ctx.ellipse(0, r * 0.1, r, r * 0.36, 0, 0, Math.PI * 2); ctx.fill();
+      ctx.fillStyle = col2;
+      ctx.beginPath(); ctx.ellipse(0, r * 0.02, r * 0.8, r * 0.28, 0, 0, Math.PI * 2); ctx.fill();
+      ctx.fillStyle = col;
+      ctx.beginPath(); ctx.arc(0, -r * 0.12, r * 0.42, Math.PI, 0); ctx.fill();
+      ctx.fillStyle = "#eaffea";
+      ctx.beginPath(); ctx.arc(0, -r * 0.2, r * 0.16, 0, Math.PI * 2); ctx.fill();
+      ctx.shadowBlur = 0;
+      for (var i = -1; i <= 1; i++) {
+        ctx.fillStyle = "#fff";
+        ctx.beginPath(); ctx.arc(i * r * 0.55, r * 0.14, r * 0.07, 0, Math.PI * 2); ctx.fill();
+      }
+    } else {
+      // антенна
+      ctx.strokeStyle = col; ctx.lineWidth = Math.max(1, r * 0.06);
+      ctx.beginPath(); ctx.moveTo(0, -r * 0.75); ctx.lineTo(0, -r * 1.15); ctx.stroke();
+      ctx.fillStyle = col2;
+      ctx.beginPath(); ctx.arc(0, -r * 1.2, r * 0.12, 0, Math.PI * 2); ctx.fill();
+      // тело
+      ctx.fillStyle = col;
+      ctx.beginPath(); ctx.ellipse(0, 0, r * 0.92, r, 0, 0, Math.PI * 2); ctx.fill();
+      ctx.fillStyle = col2;
+      ctx.beginPath(); ctx.ellipse(0, -r * 0.08, r * 0.68, r * 0.72, 0, 0, Math.PI * 2); ctx.fill();
+      ctx.shadowBlur = 0;
+      // глаза
+      ctx.fillStyle = "#0a1018";
+      ctx.beginPath(); ctx.ellipse(-r * 0.3, -r * 0.1, r * 0.2, r * 0.3, -0.25, 0, Math.PI * 2); ctx.fill();
+      ctx.beginPath(); ctx.ellipse(r * 0.3, -r * 0.1, r * 0.2, r * 0.3, 0.25, 0, Math.PI * 2); ctx.fill();
+      ctx.fillStyle = "#fff";
+      ctx.beginPath(); ctx.arc(-r * 0.26, -r * 0.18, r * 0.07, 0, Math.PI * 2); ctx.fill();
+      ctx.beginPath(); ctx.arc(r * 0.34, -r * 0.18, r * 0.07, 0, Math.PI * 2); ctx.fill();
+      // рот
+      ctx.strokeStyle = "#0a1018"; ctx.lineWidth = Math.max(1, r * 0.05);
+      ctx.beginPath(); ctx.arc(0, r * 0.28, r * 0.3, 0.25 * Math.PI, 0.75 * Math.PI); ctx.stroke();
+    }
+
+    // вспышка при попадании
+    if (a.hitFlash > 0) {
+      ctx.globalAlpha = a.hitFlash;
+      ctx.fillStyle = "#ffffff";
+      ctx.beginPath(); ctx.arc(0, 0, r * 0.9, 0, Math.PI * 2); ctx.fill();
+    }
+
+    // полоска здоровья танка
+    if (a.maxHp > 1) {
+      ctx.globalAlpha = alpha;
+      var bw = r * 1.6, bh = Math.max(3, r * 0.09);
+      ctx.fillStyle = "rgba(0,0,0,.5)";
+      ctx.fillRect(-bw / 2, -r * 1.45, bw, bh);
+      ctx.fillStyle = "#6fff9e";
+      ctx.fillRect(-bw / 2, -r * 1.45, bw * (a.hp / a.maxHp), bh);
+    }
+
+    ctx.restore();
+  }
+
+  /* ---------- Обновление (физика) ---------- */
+  function update(dt) {
+    // Камера плавно следует за мышкой (параллакс 3D)
+    if (hasMouse) {
+      var targetYaw = ((mouseX / W) - 0.5) * 0.5;
+      var targetPitch = -((mouseY / H) - 0.5) * 0.22;
+      yaw += (targetYaw - yaw) * Math.min(1, dt * 8);
+      pitch += (targetPitch - pitch) * Math.min(1, dt * 8);
+    }
+
+    // звёзды летят навстречу
+    for (var i = 0; i < stars.length; i++) {
+      var st = stars[i];
+      st.z -= (70 + wave * 6) * dt;
+      if (st.z < 40) {
+        st.x = rand(-900, 900); st.y = rand(-500, 700); st.z = FAR;
+      }
+    }
+
+    // пришельцы приближаются
+    var attackX = W / 2, anyClose = false;
+    for (var k = aliens.length - 1; k >= 0; k--) {
+      var a = aliens[k];
+      if (a.dead) continue;
+      a.z -= a.speed * dt;
+      a.swayPhase += dt * a.swaySpeed;
+      a.x += Math.sin(a.swayPhase) * a.swayAmp * dt;
+      if (a.hitFlash > 0) a.hitFlash = Math.max(0, a.hitFlash - dt * 5);
+
+      if (a.z < 500) anyClose = true;
+
+      if (a.z <= NEAR) {
+        // долетел до тебя
+        a.dead = true;
+        aliens.splice(k, 1);
+        escaped++;
+        combo = 0;
+        if (a.kind === "ufo") { updateHUD(); continue; }   // НЛО безвреден
+        hp--;
+        sndDamage();
+        shakeUntil = performance.now() + 400;
+        dmgEl.classList.remove("on"); void dmgEl.offsetWidth; dmgEl.classList.add("on");
+        addFloat(W / 2, H * 0.7, "ЩИТ ПРОБИТ!", "#ff5a5a", 26);
+        updateHUD();
+        if (hp <= 0) { endGame(); return; }
+      }
+    }
+
+    dangerEl.classList.toggle("on", anyClose);
+  }
+
+  /* ---------- Отрисовка ---------- */
+  function render(ts) {
+    var shakeX = 0, shakeY = 0;
+    if (ts < shakeUntil) {
+      shakeX = rand(-8, 8); shakeY = rand(-8, 8);
+    }
+
+    // фон-космос
+    var g = ctx.createLinearGradient(0, 0, 0, H);
+    g.addColorStop(0, "#03040e");
+    g.addColorStop(0.6, "#060a1c");
+    g.addColorStop(1, "#0a0416");
+    ctx.fillStyle = g;
+    ctx.fillRect(0, 0, W, H);
+
+    ctx.save();
+    ctx.translate(shakeX, shakeY);
+
+    // звёзды
+    for (var i = 0; i < stars.length; i++) {
+      var st = stars[i];
+      var p = project(st.x, st.y, st.z);
+      if (p.sx < -20 || p.sx > W + 20 || p.sy < -20 || p.sy > H + 20) continue;
+      var sz = clamp(p.s * 2.2 * st.b, 0.5, 4);
+      ctx.globalAlpha = clamp(1 - st.z / FAR, 0.15, 1) * st.b;
+      ctx.fillStyle = "#cfe4ff";
+      ctx.fillRect(p.sx, p.sy, sz, sz);
+    }
+    ctx.globalAlpha = 1;
+
+    // пол-сетка (для ощущения глубины)
+    drawGrid();
+
+    // пришельцы: дальние рисуем первыми
+    var order = aliens.slice().sort(function (a, b) { return b.z - a.z; });
+    for (var j = 0; j < order.length; j++) {
+      var a = order[j];
+      var p = project(a.x, a.y, a.z);
+      drawAlien(a, p);
+    }
+
+    // эффекты (лазеры/вспышки)
+    for (var f = 0; f < fx.length; f++) {
+      var e = fx[f];
+      ctx.globalAlpha = clamp(e.life / e.max, 0, 1);
+      if (e.type === "beam") {
+        ctx.strokeStyle = "#8dffb4";
+        ctx.lineWidth = e.w;
+        ctx.shadowColor = "#6fff9e"; ctx.shadowBlur = 12;
+        ctx.beginPath(); ctx.moveTo(e.x1, e.y1); ctx.lineTo(e.x2, e.y2); ctx.stroke();
+        ctx.shadowBlur = 0;
+      } else if (e.type === "flash") {
+        var rr = e.r * (1.6 - e.life / e.max);
+        var rg = ctx.createRadialGradient(e.x, e.y, 0, e.x, e.y, rr);
+        rg.addColorStop(0, "rgba(180,255,210,.95)");
+        rg.addColorStop(1, "rgba(120,255,170,0)");
+        ctx.fillStyle = rg;
+        ctx.beginPath(); ctx.arc(e.x, e.y, rr, 0, Math.PI * 2); ctx.fill();
+      }
+    }
+    ctx.globalAlpha = 1;
+
+    // всплывающий текст
+    ctx.textAlign = "center";
+    for (var t = 0; t < floats.length; t++) {
+      var fl = floats[t];
+      ctx.globalAlpha = clamp(fl.life / fl.max, 0, 1);
+      ctx.font = "800 " + fl.size + "px -apple-system, Segoe UI, Roboto, sans-serif";
+      ctx.fillStyle = "rgba(0,0,0,.6)";
+      ctx.fillText(fl.text, fl.x + 1, fl.y + 1);
+      ctx.fillStyle = fl.color;
+      ctx.fillText(fl.text, fl.x, fl.y);
+    }
+    ctx.globalAlpha = 1;
+
+    // «пушка» внизу — прицельная марка оружия
+    drawGun();
+
+    ctx.restore();
+  }
+
+  function drawGrid() {
+    var floorY = -260;
+    ctx.strokeStyle = "rgba(90,140,255,.16)";
+    ctx.lineWidth = 1;
+    // поперечные линии
+    for (var z = NEAR; z < FAR; z += 140) {
+      var half = z * W / (2 * FOCAL) * 1.6;
+      var a = project(-half, floorY, z);
+      var b = project(half, floorY, z);
+      ctx.globalAlpha = clamp(1 - z / FAR, 0.05, 0.5);
+      ctx.beginPath(); ctx.moveTo(a.sx, a.sy); ctx.lineTo(b.sx, b.sy); ctx.stroke();
+    }
+    // продольные линии (уходят в глубину)
+    for (var x = -8; x <= 8; x++) {
+      var wx = x * 110;
+      var p1 = project(wx, floorY, NEAR);
+      var p2 = project(wx, floorY, FAR);
+      ctx.globalAlpha = 0.22 * (1 - Math.abs(x) / 10);
+      ctx.beginPath(); ctx.moveTo(p1.sx, p1.sy); ctx.lineTo(p2.sx, p2.sy); ctx.stroke();
+    }
+    ctx.globalAlpha = 1;
+  }
+
+  function drawGun() {
+    // небольшой маркер оружия внизу по центру
+    var gx = W / 2, gy = H - 10;
+    ctx.save();
+    ctx.globalAlpha = 0.85;
+    ctx.fillStyle = "#9fe7c4";
+    ctx.shadowColor = "#6fff9e"; ctx.shadowBlur = 16;
+    ctx.beginPath(); ctx.ellipse(gx, gy + 26, 26, 18, 0, 0, Math.PI * 2); ctx.fill();
+    ctx.restore();
+  }
+
+  /* ---------- Эффекты ---------- */
+  function addBeam(x1, y1, x2, y2, w) {
+    fx.push({ type: "beam", x1: x1, y1: y1, x2: x2, y2: y2, w: w || 2, life: 0.16, max: 0.16 });
+  }
+  function addFlash(x, y, r) {
+    fx.push({ type: "flash", x: x, y: y, r: r || 40, life: 0.25, max: 0.25 });
+  }
+  function addFloat(x, y, text, color, size) {
+    floats.push({ x: x, y: y, text: text, color: color || "#6fff9e", size: size || 18, life: 0.9, max: 0.9 });
+  }
+
+  /* ---------- Стрельба ---------- */
+  function shootAtScreen(mx, my) {
+    shots++;
+    sndLaser();
+    addBeam(W / 2, H + 10, mx, my, 2);
+    addFlash(mx, my, 30);
+
+    // ищем ближайшего пришельца под прицелом
+    var bestHit = null, bestZ = Infinity;
+    for (var i = 0; i < aliens.length; i++) {
+      var a = aliens[i];
+      if (a.dead) continue;
+      var p = project(a.x, a.y, a.z);
+      var rad = a.world * p.s * 0.5 * 1.05;
+      var dx = mx - p.sx, dy = my - p.sy;
+      if (dx * dx + dy * dy <= rad * rad) {
+        if (p.z < bestZ) { bestZ = p.z; bestHit = a; }
+      }
+    }
+
+    if (!bestHit) {
+      combo = 0;
+      addFloat(mx, my, "мимо", "#ff5a5a", 16);
+      updateHUD();
+      return;
+    }
+
+    hits++;
+    combo++;
+    if (combo > maxCombo) maxCombo = combo;
+    var a = bestHit;
+    a.hp--;
+    a.hitFlash = 0.8;
+
+    var p = project(a.x, a.y, a.z);
+
+    if (a.hp > 0) {
+      sndTank();
+      addFloat(p.sx, p.sy - a.world * p.s * 0.5, "×", "#ff5a5a", 22);
+      updateHUD();
+      return;
+    }
+
+    // уничтожен
+    a.dead = true;
+    var mult = Math.min(1 + (combo - 1) * 0.1, 3);
+    var gained = Math.round(a.pts * mult);
+    score += gained;
+    killed++; waveKills++;
+
+    if (a.kind === "ufo") { sndUfo(); addFloat(p.sx, p.sy - 20, "+" + gained + " 🛸", "#c79bff", 22); }
+    else if (a.kind === "tank") { sndKill(); addFloat(p.sx, p.sy - 20, "+" + gained, "#ffd84d", 22); }
+    else { sndKill(); addFloat(p.sx, p.sy - 20, "+" + gained + (combo >= 3 ? " x" + mult.toFixed(1) : ""), "#6fff9e", 20); }
+
+    addFlash(p.sx, p.sy, a.world * p.s * 0.8);
+
+    var idx = aliens.indexOf(a); if (idx >= 0) aliens.splice(idx, 1);
+
+    if (waveKills >= waveKillsNeeded) nextWave();
+
+    updateHUD();
+  }
+
+  /* ---------- Волны ---------- */
+  function nextWave() {
+    wave++;
+    waveKills = 0;
+    waveKillsNeeded = 6 + wave * 2;
+    sndWave();
+    addFloat(W / 2, H * 0.4, "ВОЛНА " + wave, "#ffd84d", 34);
+    addFloat(W / 2, H * 0.4 + 40, "Пришельцы ускоряются!", "#c79bff", 18);
+  }
+
+  /* ---------- HUD ---------- */
+  function updateHUD() {
+    scoreEl.textContent = score;
+    waveEl.textContent = wave;
+    comboEl.textContent = combo >= 2 ? "🔥 " + combo : "";
+    var html = "";
+    for (var i = 0; i < START_HP; i++) html += '<span class="hp' + (i < hp ? "" : " empty") + '"></span>';
+    shieldEl.innerHTML = html;
+  }
+
+  /* ---------- Главный цикл ---------- */
+  function frame(ts) {
+    if (!running) return;
+    var dt = lastTs ? Math.min((ts - lastTs) / 1000, 0.05) : 0.016;
+    lastTs = ts;
+
+    // обновляем эффекты
+    for (var i = fx.length - 1; i >= 0; i--) {
+      fx[i].life -= dt;
+      if (fx[i].life <= 0) fx.splice(i, 1);
+    }
+    for (var f = floats.length - 1; f >= 0; f--) {
+      floats[f].life -= dt;
+      floats[f].y -= dt * 55;
+      if (floats[f].life <= 0) floats.splice(f, 1);
+    }
+
+    update(dt);
+    render(performance.now());
+
+    // подсветка прицела при наведении на врага
+    hotReticle();
+
+    rafId = requestAnimationFrame(frame);
+  }
+
+  function hotReticle() {
+    var hot = false;
+    for (var i = 0; i < aliens.length; i++) {
+      var a = aliens[i];
+      if (a.dead) continue;
+      var p = project(a.x, a.y, a.z);
+      var rad = a.world * p.s * 0.5 * 1.05;
+      var dx = mouseX - p.sx, dy = mouseY - p.sy;
+      if (dx * dx + dy * dy <= rad * rad) { hot = true; break; }
+    }
+    crosshair.classList.toggle("hot", hot);
+  }
+
+  /* ---------- Экран старта ---------- */
+  function showStart() {
+    overlay.classList.remove("hidden");
+    var b = loadBoard().slice(0, 5);
+    var boardHtml = "";
+    if (b.length) {
+      boardHtml = '<h2>🏆 Рекорды</h2><div class="board">';
+      for (var i = 0; i < b.length; i++) {
+        boardHtml += '<div class="line"><span class="rank">' + (i + 1) + '</span>' +
+                     '<span class="m">Волна ' + b[i].wave + '</span><span class="s">' + b[i].score + '</span></div>';
+      }
+      boardHtml += "</div>";
+    }
+    overlay.innerHTML =
+      '<div class="card">' +
+        '<h1>👽 3D ВТОРЖЕНИЕ</h1>' +
+        '<p>Пришельцы вылетают из глубины космоса и <b>летят прямо на тебя</b>.<br>' +
+        'Они становятся всё больше и ближе — стреляй, пока не долетели!</p>' +
+        '<p style="font-size:13px">Целься мышкой и <b>кликай</b>. Камера слегка поворачивается за курсором.<br>' +
+        'У Земли <b>' + START_HP + ' единиц щита</b>.</p>' +
+        '<div class="legend">' +
+          '<span><b>🟢</b> обычный 30</span>' +
+          '<span><b>🟡</b> разведчик 100 (быстрый)</span>' +
+          '<span><b>🔴</b> танк 60 (3 попадания)</span>' +
+          '<span><b>🛸</b> НЛО 150 (безвредный бонус)</span>' +
+        '</div>' +
+        '<div style="margin-top:18px"><button>НАЧАТЬ ОБОРОНУ</button></div>' +
+        boardHtml +
+        '<p style="margin-top:14px;font-size:12px;opacity:.6">Серии попаданий умножают очки • Каждая волна ближе и быстрее</p>' +
+      '</div>';
+  }
+
+  /* ---------- Конец игры ---------- */
+  function showGameOver() {
+    var board = loadBoard();
+    var entry = { score: score, wave: wave, acc: accuracy(), date: Date.now() };
+    board.push(entry);
+    board.sort(function (a, c) { return c.score - a.score; });
+    board = board.slice(0, 10);
+    saveBoard(board);
+    best = board.length ? board[0].score : 0;
+    bestEl.textContent = best;
+    var isRecord = board.length && board[0].date === entry.date;
+
+    var html = '<div class="board">';
+    for (var i = 0; i < Math.min(board.length, 5); i++) {
+      var me = (board[i].date === entry.date) ? " me" : "";
+      html += '<div class="line' + me + '"><span class="rank">' + (i + 1) + '</span>' +
+              '<span class="m">Волна ' + board[i].wave + '</span><span class="s">' + board[i].score + '</span></div>';
+    }
+    html += "</div>";
+
+    overlay.classList.remove("hidden");
+    overlay.innerHTML =
+      '<div class="card">' +
+        '<h1>' + (isRecord ? "🏆 НОВЫЙ РЕКОРД!" : "💥 ЗЕМЛЯ ПАЛА") + '</h1>' +
+        '<p style="opacity:.7;margin-top:-2px">Пришельцы пробили щит</p>' +
+        '<div class="big">' + score + '</div>' +
+        '<div class="row">' +
+          '<div class="col">Волна<b>' + wave + '</b></div>' +
+          '<div class="col">Уничтожено<b>' + killed + '</b></div>' +
+          '<div class="col">Точность<b>' + accuracy() + '%</b></div>' +
+          '<div class="col">Макс. серия<b>' + maxCombo + '</b></div>' +
+        '</div>' +
+        '<h2>🏆 Рекорды</h2>' + html +
+        '<div style="margin-top:16px">' +
+          '<button data-action="again">Играть снова</button>' +
+          '<button class="ghost" data-action="menu">В меню</button>' +
+        '</div>' +
+      '</div>';
+  }
+
+  /* ---------- Старт / стоп ---------- */
+  function clearAll() {
+    aliens = []; fx = []; floats = [];
+  }
+
+  function startGame() {
+    getAudio();
+    clearTimeout(spawnTimer);
+    cancelAnimationFrame(rafId);
+    clearAll();
+    resize();
+
+    running = true;
+    score = 0; hp = START_HP; wave = 1; combo = 0; maxCombo = 0;
+    killed = 0; escaped = 0; shots = 0; hits = 0;
+    waveKills = 0; waveKillsNeeded = 8;
+    yaw = 0; pitch = 0; shakeUntil = 0;
+    buildStars();
+
+    overlay.classList.add("hidden");
+    updateHUD();
+    lastTs = 0;
+    rafId = requestAnimationFrame(frame);
+    spawnAlien();
+  }
+
+  function endGame() {
+    running = false;
+    clearTimeout(spawnTimer);
+    cancelAnimationFrame(rafId);
+    crosshair.style.opacity = "0";
+    dangerEl.classList.remove("on");
+    sndOver();
+    showGameOver();
+  }
+
+  /* ---------- Управление ---------- */
+  function toLocal(e) {
+    var r = canvas.getBoundingClientRect();
+    return { x: e.clientX - r.left, y: e.clientY - r.top };
+  }
+  arena.addEventListener("pointermove", function (e) {
+    var p = toLocal(e);
+    mouseX = p.x; mouseY = p.y; hasMouse = true;
+    crosshair.style.left = p.x + "px";
+    crosshair.style.top = p.y + "px";
+    crosshair.style.opacity = running ? "1" : "0";
+  });
+  arena.addEventListener("pointerleave", function () { crosshair.style.opacity = "0"; });
+
+  arena.addEventListener("pointerdown", function (e) {
+    if (!running) return;
+    if (e.target.closest && e.target.closest("#overlay")) return;
+    var p = toLocal(e);
+    mouseX = p.x; mouseY = p.y; hasMouse = true;
+    shootAtScreen(p.x, p.y);
+  });
+
+  overlay.addEventListener("click", function (e) {
+    var btn = e.target.closest && e.target.closest("button");
+    if (!btn) return;
+    if (btn.dataset.action === "menu") showStart();
+    else startGame();
+  });
+
+  document.addEventListener("keydown", function (e) {
+    if (!running && (e.key === " " || e.key === "Enter")) { e.preventDefault(); startGame(); }
+  });
+
+  window.addEventListener("resize", function () { resize(); buildStars(); });
+
+  resize();
+  updateHUD();
+  showStart();
+})();
+</script>
+</body>
+</html>

@@ -1,0 +1,949 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<title>Салон красоты 🎨💄</title>
+<style>
+  * { box-sizing: border-box; }
+  html, body {
+    margin: 0; height: 100%; overflow: hidden;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    -webkit-user-select: none; user-select: none;
+  }
+  #app { display: flex; flex-direction: column; height: 100%;
+    background: linear-gradient(160deg, #ffe0f0, #f7d9ff 40%, #d9e8ff 100%); }
+
+  /* ===== Шапка ===== */
+  #top {
+    display: flex; align-items: center; gap: 14px; padding: 10px 18px;
+    background: linear-gradient(180deg, rgba(255,255,255,.9), rgba(255,240,250,.75));
+    border-bottom: 2px solid #ffc2e0; z-index: 10; flex-wrap: wrap;
+  }
+  #top h1 { margin: 0; font-size: 20px; color: #d63384; letter-spacing: .02em; }
+  #top .spacer { flex: 1; }
+  #top button {
+    padding: 9px 16px; font-size: 14px; font-weight: 700; cursor: pointer;
+    border-radius: 12px; border: 2px solid #ffb0d8; background: #fff;
+    color: #b32d75; transition: all .12s; font-family: inherit;
+  }
+  #top button:hover { background: #fff0f8; transform: translateY(-1px); }
+  #top button:active { transform: translateY(1px); }
+  #top button.primary {
+    background: linear-gradient(180deg,#ff8fc0,#f0579c); color: #fff; border-color: #e04b8c;
+    box-shadow: 0 4px 0 #c93d7a;
+  }
+
+  /* ===== Основная зона ===== */
+  #main { display: flex; flex: 1; min-height: 0; }
+
+  /* Панель инструментов слева */
+  #panel {
+    width: 300px; flex-shrink: 0; overflow-y: auto; padding: 14px;
+    background: rgba(255,255,255,.75); border-right: 2px solid #ffc2e0;
+  }
+  #panel::-webkit-scrollbar { width: 8px; }
+  #panel::-webkit-scrollbar-thumb { background: #ffb0d8; border-radius: 8px; }
+  .group { margin-bottom: 18px; }
+  .group h2 {
+    margin: 0 0 8px; font-size: 13px; text-transform: uppercase; letter-spacing: .08em;
+    color: #b32d75; opacity: .9;
+  }
+  .swatches { display: flex; flex-wrap: wrap; gap: 7px; }
+  .sw {
+    width: 30px; height: 30px; border-radius: 50%; cursor: pointer;
+    border: 3px solid #fff; box-shadow: 0 2px 6px rgba(180,60,130,.3);
+    transition: transform .1s;
+  }
+  .sw:hover { transform: scale(1.12); }
+  .sw.active { box-shadow: 0 0 0 3px #d63384, 0 0 12px rgba(214,51,132,.6); transform: scale(1.1); }
+  .tools { display: flex; flex-wrap: wrap; gap: 7px; }
+  .tool {
+    flex: 1 1 88px; padding: 10px 8px; border-radius: 12px; cursor: pointer;
+    border: 2px solid #ffc2e0; background: #fff; color: #a82d6e; font-size: 13px;
+    font-weight: 700; text-align: center; transition: all .12s; font-family: inherit;
+  }
+  .tool:hover { background: #fff3fa; }
+  .tool.active { background: linear-gradient(180deg,#ff9fca,#f0579c); color: #fff; border-color: #e04b8c; }
+  .tool .ic { display: block; font-size: 19px; margin-bottom: 2px; }
+  .slider { display: flex; align-items: center; gap: 10px; font-size: 12px; color: #a82d6e; }
+  .slider input { flex: 1; accent-color: #f0579c; }
+  .row { display: flex; align-items: center; gap: 10px; }
+  .mini {
+    padding: 8px 12px; border-radius: 10px; border: 2px solid #ffc2e0; background: #fff;
+    color: #a82d6e; font-weight: 700; font-size: 13px; cursor: pointer; font-family: inherit;
+  }
+  .mini:hover { background: #fff3fa; }
+  .mini.active { background: linear-gradient(180deg,#ff9fca,#f0579c); color: #fff; border-color: #e04b8c; }
+  .hairgrid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+  .hairchoice {
+    background: #fff; border: 2px solid #ffc2e0; border-radius: 12px; padding: 6px;
+    cursor: pointer; text-align: center; transition: all .12s;
+  }
+  .hairchoice:hover { background: #fff3fa; }
+  .hairchoice.active { border-color: #d63384; box-shadow: 0 0 0 2px #ffb0d8; }
+  .hairchoice svg { width: 100%; height: 52px; display: block; }
+  .hairchoice span { font-size: 11px; color: #a82d6e; display: block; margin-top: 2px; }
+
+  /* Сцена справа */
+  #stage {
+    position: relative; flex: 1; display: flex; align-items: center; justify-content: center;
+    overflow: hidden;
+  }
+  #canvasWrap {
+    position: relative; width: min(78vmin, 560px); height: min(92vmin, 660px);
+    background: radial-gradient(ellipse at 50% 35%, #fff, #ffe8f4 70%);
+    border-radius: 26px; box-shadow: 0 24px 60px rgba(200,80,140,.28);
+    overflow: hidden;
+  }
+  #baseCanvas, #paintCanvas {
+    position: absolute; inset: 0; width: 100%; height: 100%;
+  }
+  #paintCanvas { cursor: crosshair; touch-action: none; }
+  #paintCanvas.eraser { cursor: cell; }
+
+  /* Кисть-курсор (кружок) */
+  #brushCursor {
+    position: absolute; border-radius: 50%; pointer-events: none; z-index: 20;
+    border: 2px solid rgba(214,51,132,.7); background: rgba(255,255,255,.25);
+    transform: translate(-50%,-50%); display: none;
+  }
+
+  /* Уведомление */
+  #toast {
+    position: absolute; left: 50%; bottom: 24px; transform: translateX(-50%) translateY(20px);
+    background: rgba(214,51,132,.95); color: #fff; padding: 10px 22px; border-radius: 999px;
+    font-size: 14px; font-weight: 700; opacity: 0; pointer-events: none; transition: all .3s;
+    z-index: 30; box-shadow: 0 8px 24px rgba(200,60,130,.4);
+  }
+  #toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+
+  /* Оверлей (стартовый) */
+  #overlay {
+    position: absolute; inset: 0; display: flex; align-items: center; justify-content: center;
+    background: rgba(255,225,240,.9); backdrop-filter: blur(6px); z-index: 40;
+    text-align: center; padding: 20px; overflow: auto;
+  }
+  #overlay.hidden { display: none; }
+  #overlay .card {
+    max-width: 480px; width: 100%; padding: 32px 30px; border-radius: 24px;
+    background: #fff; border: 3px solid #ffb0d8; box-shadow: 0 24px 60px rgba(200,80,140,.35);
+  }
+  #overlay h1 { margin: 0 0 10px; font-size: 32px;
+    background: linear-gradient(90deg,#f0579c,#b06bd8,#5a9df0);
+    -webkit-background-clip: text; background-clip: text; -webkit-text-fill-color: transparent; }
+  #overlay p { margin: 10px 0; line-height: 1.6; color: #a82d6e; font-size: 15px; }
+  #overlay button {
+    margin-top: 18px; padding: 15px 40px; font-size: 18px; font-weight: 800;
+    color: #fff; background: linear-gradient(180deg,#ff8fc0,#f0579c); border: none;
+    border-radius: 14px; cursor: pointer; box-shadow: 0 7px 0 #c93d7a;
+    transition: transform .08s; font-family: inherit;
+  }
+  #overlay button:active { transform: translateY(4px); box-shadow: 0 3px 0 #c93d7a; }
+
+  /* Мобильно */
+  @media (max-width: 760px) {
+    #main { flex-direction: column; }
+    #panel { width: auto; height: 44%; border-right: none; border-bottom: 2px solid #ffc2e0; }
+    #stage { height: 56%; }
+    #canvasWrap { width: min(70vw, 340px); height: min(80vw, 380px); }
+  }
+</style>
+</head>
+<body>
+  <div id="app">
+    <div id="top">
+      <h1>💄 Салон красоты</h1>
+      <div class="spacer"></div>
+      <button id="btnClear">🧽 Всё смыть</button>
+      <button id="btnUndo">↩️ Отменить</button>
+      <button class="primary" id="btnSave">📸 Сохранить образ</button>
+    </div>
+
+    <div id="main">
+      <!-- ===== Панель ===== -->
+      <div id="panel">
+        <div class="group">
+          <h2>🎨 Инструмент</h2>
+          <div class="tools" id="toolBtns">
+            <button class="tool active" data-tool="paint"><span class="ic">🖌️</span>Кисть</button>
+            <button class="tool" data-tool="eraser"><span class="ic">🧽</span>Ластик</button>
+            <button class="tool" data-tool="blush"><span class="ic">🌸</span>Румяна</button>
+            <button class="tool" data-tool="eyeshadow"><span class="ic">👁️</span>Тени</button>
+            <button class="tool" data-tool="glitter"><span class="ic">✨</span>Блёстки</button>
+          </div>
+        </div>
+
+        <div class="group">
+          <h2>🎨 Цвет</h2>
+          <div class="swatches" id="swatches"></div>
+        </div>
+
+        <div class="group" id="sizeGroup">
+          <h2>🖌️ Размер кисти</h2>
+          <div class="slider">
+            <input type="range" id="sizeRange" min="2" max="40" value="14">
+            <span id="sizeVal">14</span>
+          </div>
+        </div>
+
+        <div class="group">
+          <h2>👁️ Глаза</h2>
+          <div class="swatches" id="eyeSwatches"></div>
+        </div>
+
+        <div class="group">
+          <h2>💄 Помада</h2>
+          <div class="swatches" id="lipSwatches"></div>
+          <div class="row" style="margin-top:8px">
+            <button class="mini" id="lipOff">Без помады</button>
+          </div>
+        </div>
+
+        <div class="group">
+          <h2>💇 Причёска</h2>
+          <div class="hairgrid" id="hairGrid"></div>
+        </div>
+
+        <div class="group">
+          <h2>🎨 Цвет волос</h2>
+          <div class="swatches" id="hairColors"></div>
+        </div>
+
+        <div class="group">
+          <h2>👗 Фон</h2>
+          <div class="swatches" id="bgSwatches"></div>
+        </div>
+      </div>
+
+      <!-- ===== Сцена ===== -->
+      <div id="stage">
+        <div id="canvasWrap">
+          <canvas id="baseCanvas"></canvas>
+          <canvas id="paintCanvas"></canvas>
+          <div id="brushCursor"></div>
+          <div id="toast"></div>
+          <div id="overlay"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+<script>
+(function () {
+  "use strict";
+
+  /* ===================== НАСТРОЙКИ ===================== */
+  var FACE_W = 460, FACE_H = 600;   // логический размер холста
+  var MAX_UNDO = 12;
+  /* ==================================================== */
+
+  var wrap   = document.getElementById("canvasWrap");
+  var base   = document.getElementById("baseCanvas");
+  var paint  = document.getElementById("paintCanvas");
+  var bctx   = base.getContext("2d");
+  var pctx   = paint.getContext("2d");
+  var brushCursor = document.getElementById("brushCursor");
+  var overlay = document.getElementById("overlay");
+  var toastEl = document.getElementById("toast");
+
+  var DPR = 1;
+  function setupCanvas(keepPaint) {
+    DPR = Math.min(window.devicePixelRatio || 1, 2);
+    var r = wrap.getBoundingClientRect();
+    var newW = Math.round(r.width), newH = Math.round(r.height);
+    // сохраняем текущий макияж, чтобы не потерять при ресайзе
+    var saved = null;
+    if (keepPaint && paint.width > 0) {
+      try { saved = document.createElement("canvas"); saved.width = paint.width; saved.height = paint.height;
+            saved.getContext("2d").drawImage(paint, 0, 0); } catch (e) {}
+    }
+    FACE_W = newW; FACE_H = newH;
+    [base, paint].forEach(function (cv) {
+      cv.width = Math.round(FACE_W * DPR);
+      cv.height = Math.round(FACE_H * DPR);
+    });
+    bctx.setTransform(DPR, 0, 0, DPR, 0, 0);
+    pctx.setTransform(DPR, 0, 0, DPR, 0, 0);
+    redrawBase();
+    if (saved) {
+      pctx.save();
+      pctx.setTransform(1, 0, 0, 1, 0, 0);
+      pctx.drawImage(saved, 0, 0, paint.width, paint.height);
+      pctx.restore();
+    }
+  }
+
+  /* ===================== СОСТОЯНИЕ ===================== */
+  var state = {
+    tool: "paint",
+    color: "#ff5a8a",
+    size: 14,
+    eyeColor: "#4a2f22",
+    lipColor: null,
+    hair: "long",
+    hairColor: "#5a3820",
+    bg: "grad-pink"
+  };
+  var undoStack = [];
+  var isDrawing = false, lastX = 0, lastY = 0;
+
+  /* ===================== ПАЛИТРЫ ===================== */
+  var PAINT_COLORS = [
+    "#ff5a8a", "#ff8fb0", "#ffd1e0", "#f0579c", "#c94b8e",
+    "#ff6b6b", "#ffb347", "#ffe066", "#8fd96b", "#3fae5c",
+    "#5bc0eb", "#4a90e2", "#8b5cf6", "#b06bd8", "#ffffff",
+    "#3a2a2a", "#8a6a4a", "#ffd7a8"
+  ];
+  var EYE_COLORS = ["#4a2f22", "#2b2b30", "#3a7d44", "#2e5fa3", "#7a4a8f", "#a0522d", "#6b8e23"];
+  var LIP_COLORS = ["#d6336c", "#e63946", "#c0392b", "#b03060", "#ff6b8a", "#ff9aa2", "#8b3a62", "#6a1b3d"];
+  var HAIR_COLORS = [
+    { c: "#5a3820", n: "Каштан" }, { c: "#2b1a10", n: "Чёрный" },
+    { c: "#c9a66b", n: "Блонд" }, { c: "#e0c060", n: "Золотой" },
+    { c: "#8b3a1e", n: "Рыжий" }, { c: "#a0a0b0", n: "Седой" },
+    { c: "#f0579c", n: "Розовый" }, { c: "#8b5cf6", n: "Фиолет" },
+    { c: "#5bc0eb", n: "Голубой" }, { c: "#3fae5c", n: "Зелёный" }
+  ];
+  var BGS = [
+    { id: "grad-pink", n: "Розовый", css: "radial-gradient(ellipse at 50% 35%, #fff, #ffe0f0 70%)" },
+    { id: "grad-blue", n: "Небо", css: "radial-gradient(ellipse at 50% 35%, #fff, #d9ecff 70%)" },
+    { id: "grad-purple", n: "Сирень", css: "radial-gradient(ellipse at 50% 35%, #fff, #ead9ff 70%)" },
+    { id: "grad-peach", n: "Персик", css: "radial-gradient(ellipse at 50% 35%, #fff, #ffe4d0 70%)" },
+    { id: "grad-mint", n: "Мята", css: "radial-gradient(ellipse at 50% 35%, #fff, #d9fff0 70%)" },
+    { id: "grad-night", n: "Ночь", css: "radial-gradient(ellipse at 50% 35%, #3a3a5c, #1a1a2e 80%)" }
+  ];
+
+  /* ===================== ПРИЧЁСКИ (SVG-пути) =====================
+     Рисуем волосы на canvas функциями. */
+  var HAIRSTYLES = [
+    { id: "long",   n: "Длинные" },
+    { id: "short",  n: "Каре" },
+    { id: "pony",   n: "Хвост" },
+    { id: "buns",   n: "Пучки" },
+    { id: "curls",  n: "Кудри" },
+    { id: "afro",   n: "Афро" },
+    { id: "bob",    n: "Боб" },
+    { id: "braids", n: "Косички" },
+    { id: "topknot",n: "Гулька" }
+  ];
+
+  function hexToRgb(h) {
+    h = h.replace("#", "");
+    if (h.length === 3) h = h.split("").map(function (c) { return c + c; }).join("");
+    return { r: parseInt(h.slice(0,2),16), g: parseInt(h.slice(2,4),16), b: parseInt(h.slice(4,6),16) };
+  }
+  function shade(hex, f) {
+    var c = hexToRgb(hex);
+    return "rgb(" + Math.round(c.r*f) + "," + Math.round(c.g*f) + "," + Math.round(c.b*f) + ")";
+  }
+  function lighten(hex, amt) {
+    var c = hexToRgb(hex);
+    return "rgb(" + Math.min(255,c.r+amt) + "," + Math.min(255,c.g+amt) + "," + Math.min(255,c.b+amt) + ")";
+  }
+
+  /* ===================== РИСУЕМ ЛИЦО ===================== */
+  function redrawBase() {
+    var W = FACE_W, H = FACE_H;
+    bctx.clearRect(0, 0, W, H);
+
+    // фон
+    var bg = BGS.find(function (b) { return b.id === state.bg; }) || BGS[0];
+    drawBackground(bg);
+
+    var cx = W / 2;
+    var cy = H * 0.5;
+    var fw = Math.min(W * 0.31, H * 0.20);   // половина ширины головы
+    var fh = fw * 1.3;                        // половина высоты лица
+
+    // шея и плечи
+    bctx.fillStyle = "#f2c9a8";
+    bctx.beginPath();
+    bctx.moveTo(cx - fw*0.35, cy + fh*0.75);
+    bctx.lineTo(cx - fw*0.4, cy + fh*1.5);
+    bctx.lineTo(cx + fw*0.4, cy + fh*1.5);
+    bctx.lineTo(cx + fw*0.35, cy + fh*0.75);
+    bctx.closePath();
+    bctx.fill();
+    // плечи / одежда
+    bctx.fillStyle = "#b06bd8";
+    bctx.beginPath();
+    bctx.moveTo(cx - fw*2.2, H);
+    bctx.quadraticCurveTo(cx - fw*1.1, cy + fh*1.35, cx - fw*0.4, cy + fh*1.45);
+    bctx.lineTo(cx + fw*0.4, cy + fh*1.45);
+    bctx.quadraticCurveTo(cx + fw*1.1, cy + fh*1.35, cx + fw*2.2, H);
+    bctx.closePath();
+    bctx.fill();
+    // воротничок
+    bctx.fillStyle = "rgba(255,255,255,.5)";
+    bctx.beginPath();
+    bctx.ellipse(cx, cy + fh*1.42, fw*0.5, fh*0.12, 0, 0, Math.PI*2);
+    bctx.fill();
+
+    // уши
+    bctx.fillStyle = "#f2c9a8";
+    bctx.beginPath();
+    bctx.ellipse(cx - fw, cy, fw*0.16, fh*0.2, 0, 0, Math.PI*2); bctx.fill();
+    bctx.beginPath();
+    bctx.ellipse(cx + fw, cy, fw*0.16, fh*0.2, 0, 0, Math.PI*2); bctx.fill();
+
+    // ---- волосы ЗА головой (длинные пряди) ----
+    drawHairBack(cx, cy, fw, fh);
+
+    // лицо
+    var fg = bctx.createRadialGradient(cx - fw*0.3, cy - fh*0.4, fw*0.2, cx, cy, fh*1.3);
+    fg.addColorStop(0, "#ffe0c8");
+    fg.addColorStop(0.6, "#f7cfae");
+    fg.addColorStop(1, "#e8b894");
+    bctx.fillStyle = fg;
+    bctx.beginPath();
+    // форма лица: овал с подбородком
+    bctx.moveTo(cx - fw, cy - fh*0.25);
+    bctx.bezierCurveTo(cx - fw, cy - fh*0.9, cx + fw, cy - fh*0.9, cx + fw, cy - fh*0.25);
+    bctx.bezierCurveTo(cx + fw, cy + fh*0.55, cx + fw*0.5, cy + fh, cx, cy + fh);
+    bctx.bezierCurveTo(cx - fw*0.5, cy + fh, cx - fw, cy + fh*0.55, cx - fw, cy - fh*0.25);
+    bctx.closePath();
+    bctx.fill();
+
+    // брови
+    bctx.strokeStyle = "#6b4a32"; bctx.lineWidth = fw*0.06; bctx.lineCap = "round";
+    bctx.beginPath();
+    bctx.moveTo(cx - fw*0.55, cy - fh*0.28);
+    bctx.quadraticCurveTo(cx - fw*0.3, cy - fh*0.4, cx - fw*0.08, cy - fh*0.3);
+    bctx.stroke();
+    bctx.beginPath();
+    bctx.moveTo(cx + fw*0.08, cy - fh*0.3);
+    bctx.quadraticCurveTo(cx + fw*0.3, cy - fh*0.4, cx + fw*0.55, cy - fh*0.28);
+    bctx.stroke();
+
+    // глаза (белки)
+    bctx.fillStyle = "#fff";
+    var eOffX = fw*0.42, eY = cy - fh*0.05, eW = fw*0.24, eH = fh*0.13;
+    bctx.beginPath(); bctx.ellipse(cx - eOffX, eY, eW, eH, 0, 0, Math.PI*2); bctx.fill();
+    bctx.beginPath(); bctx.ellipse(cx + eOffX, eY, eW, eH, 0, 0, Math.PI*2); bctx.fill();
+    // обводка ресниц
+    bctx.strokeStyle = "#3a2a20"; bctx.lineWidth = fw*0.035;
+    bctx.beginPath(); bctx.ellipse(cx - eOffX, eY, eW, eH, 0, Math.PI, Math.PI*2); bctx.stroke();
+    bctx.beginPath(); bctx.ellipse(cx + eOffX, eY, eW, eH, 0, Math.PI, Math.PI*2); bctx.stroke();
+    // радужка
+    bctx.fillStyle = state.eyeColor;
+    bctx.beginPath(); bctx.arc(cx - eOffX, eY, eH*0.85, 0, Math.PI*2); bctx.fill();
+    bctx.beginPath(); bctx.arc(cx + eOffX, eY, eH*0.85, 0, Math.PI*2); bctx.fill();
+    // зрачки
+    bctx.fillStyle = "#1a1210";
+    bctx.beginPath(); bctx.arc(cx - eOffX, eY, eH*0.4, 0, Math.PI*2); bctx.fill();
+    bctx.beginPath(); bctx.arc(cx + eOffX, eY, eH*0.4, 0, Math.PI*2); bctx.fill();
+    // блеск
+    bctx.fillStyle = "#fff";
+    bctx.beginPath(); bctx.arc(cx - eOffX - eH*0.25, eY - eH*0.3, eH*0.2, 0, Math.PI*2); bctx.fill();
+    bctx.beginPath(); bctx.arc(cx + eOffX - eH*0.25, eY - eH*0.3, eH*0.2, 0, Math.PI*2); bctx.fill();
+    // ресницы
+    bctx.strokeStyle = "#2a1a12"; bctx.lineWidth = fw*0.025;
+    bctx.beginPath();
+    for (var l = -2; l <= 2; l++) {
+      bctx.moveTo(cx - eOffX + l*eW*0.35, eY - eH*0.95);
+      bctx.lineTo(cx - eOffX + l*eW*0.42, eY - eH*1.35);
+    }
+    bctx.stroke();
+    bctx.beginPath();
+    for (var l2 = -2; l2 <= 2; l2++) {
+      bctx.moveTo(cx + eOffX + l2*eW*0.35, eY - eH*0.95);
+      bctx.lineTo(cx + eOffX + l2*eW*0.42, eY - eH*1.35);
+    }
+    bctx.stroke();
+
+    // нос
+    bctx.strokeStyle = "#dba884"; bctx.lineWidth = fw*0.035;
+    bctx.beginPath();
+    bctx.moveTo(cx - fw*0.02, cy + fh*0.18);
+    bctx.quadraticCurveTo(cx - fw*0.08, cy + fh*0.34, cx + fw*0.03, cy + fh*0.34);
+    bctx.stroke();
+
+    // губы
+    var lipY = cy + fh*0.62;
+    var lipW = fw*0.36;
+    if (state.lipColor) {
+      bctx.fillStyle = state.lipColor;
+      bctx.beginPath();
+      bctx.moveTo(cx - lipW, lipY);
+      bctx.quadraticCurveTo(cx - lipW*0.4, lipY - fh*0.1, cx, lipY - fh*0.03);
+      bctx.quadraticCurveTo(cx + lipW*0.4, lipY - fh*0.1, cx + lipW, lipY);
+      bctx.quadraticCurveTo(cx + lipW*0.4, lipY + fh*0.13, cx, lipY + fh*0.13);
+      bctx.quadraticCurveTo(cx - lipW*0.4, lipY + fh*0.13, cx - lipW, lipY);
+      bctx.closePath();
+      bctx.fill();
+      // блик
+      bctx.fillStyle = "rgba(255,255,255,.35)";
+      bctx.beginPath();
+      bctx.ellipse(cx - lipW*0.15, lipY + fh*0.04, lipW*0.3, fh*0.02, 0, 0, Math.PI*2);
+      bctx.fill();
+    } else {
+      // естественные губы
+      bctx.strokeStyle = "#d98a86"; bctx.lineWidth = fw*0.05;
+      bctx.beginPath();
+      bctx.moveTo(cx - lipW, lipY);
+      bctx.quadraticCurveTo(cx, lipY - fh*0.06, cx + lipW, lipY);
+      bctx.quadraticCurveTo(cx, lipY + fh*0.1, cx - lipW, lipY);
+      bctx.stroke();
+    }
+
+    // ---- волосы ПЕРЕД головой (чёлка/верх) ----
+    drawHairFront(cx, cy, fw, fh);
+  }
+
+  function drawBackground(bg) {
+    var W = FACE_W, H = FACE_H;
+    if (bg.id === "grad-night") {
+      var g = bctx.createRadialGradient(W*0.5, H*0.35, 20, W*0.5, H*0.6, H);
+      g.addColorStop(0, "#3a3a5c"); g.addColorStop(1, "#1a1a2e");
+      bctx.fillStyle = g;
+      // звёзды
+      bctx.fillStyle = "rgba(255,255,255,.7)";
+      for (var i = 0; i < 40; i++) {
+        var sx = (i*137.5 % W), sy = (i*89.3 % (H*0.6));
+        bctx.fillRect(sx, sy, 2, 2);
+      }
+    } else {
+      var colors = {
+        "grad-pink": ["#ffffff", "#ffe0f0"],
+        "grad-blue": ["#ffffff", "#d9ecff"],
+        "grad-purple": ["#ffffff", "#ead9ff"],
+        "grad-peach": ["#ffffff", "#ffe4d0"],
+        "grad-mint": ["#ffffff", "#d9fff0"]
+      }[bg.id] || ["#fff", "#ffe0f0"];
+      var g2 = bctx.createRadialGradient(W*0.5, H*0.35, 20, W*0.5, H*0.6, H);
+      g2.addColorStop(0, colors[0]); g2.addColorStop(1, colors[1]);
+      bctx.fillStyle = g2;
+      // декор: сердечки/звёздочки
+      bctx.fillStyle = "rgba(255,255,255,.6)";
+    }
+    bctx.fillRect(0, 0, W, H);
+    // декоративные пузырьки
+    bctx.save();
+    for (var k = 0; k < 10; k++) {
+      var bx = ((k*97.3) % W);
+      var by = ((k*151.7) % H);
+      var br = 6 + (k % 4) * 5;
+      bctx.globalAlpha = 0.12;
+      bctx.fillStyle = k % 2 ? "#ffffff" : "#ffd1e0";
+      bctx.beginPath(); bctx.arc(bx, by, br, 0, Math.PI*2); bctx.fill();
+    }
+    bctx.restore();
+  }
+
+  /* ---- Волосы: рисуем разными стилями ---- */
+  function drawHairBack(cx, cy, fw, fh) {
+    var c = state.hairColor;
+    bctx.fillStyle = c;
+    var dark = shade(c, 0.75);
+    switch (state.hair) {
+      case "long":
+        bctx.beginPath();
+        bctx.moveTo(cx - fw*1.15, cy - fh*0.3);
+        bctx.quadraticCurveTo(cx - fw*1.5, cy + fh*1.1, cx - fw*1.0, cy + fh*1.9);
+        bctx.lineTo(cx + fw*1.0, cy + fh*1.9);
+        bctx.quadraticCurveTo(cx + fw*1.5, cy + fh*1.1, cx + fw*1.15, cy - fh*0.3);
+        bctx.quadraticCurveTo(cx, cy - fh*1.3, cx - fw*1.15, cy - fh*0.3);
+        bctx.fill();
+        break;
+      case "curls":
+        for (var i = -2; i <= 2; i++) {
+          bctx.beginPath();
+          bctx.arc(cx + i*fw*0.55, cy + fh*0.9 + Math.abs(i)*fh*0.15, fw*0.5, 0, Math.PI*2);
+          bctx.fill();
+        }
+        bctx.beginPath();
+        bctx.ellipse(cx, cy - fh*0.2, fw*1.25, fh*0.85, 0, 0, Math.PI*2);
+        bctx.fill();
+        break;
+      case "afro":
+        bctx.beginPath();
+        bctx.arc(cx, cy - fh*0.15, fw*1.65, 0, Math.PI*2);
+        bctx.fill();
+        break;
+      case "bob":
+        bctx.beginPath();
+        bctx.moveTo(cx - fw*1.15, cy - fh*0.3);
+        bctx.quadraticCurveTo(cx - fw*1.3, cy + fh*0.7, cx - fw*1.05, cy + fh*1.1);
+        bctx.lineTo(cx + fw*1.05, cy + fh*1.1);
+        bctx.quadraticCurveTo(cx + fw*1.3, cy + fh*0.7, cx + fw*1.15, cy - fh*0.3);
+        bctx.quadraticCurveTo(cx, cy - fh*1.35, cx - fw*1.15, cy - fh*0.3);
+        bctx.fill();
+        break;
+      case "braids":
+        bctx.beginPath();
+        bctx.ellipse(cx, cy - fh*0.25, fw*1.18, fh*0.8, 0, 0, Math.PI*2);
+        bctx.fill();
+        // две косички
+        [-1, 1].forEach(function (s) {
+          for (var j = 0; j < 5; j++) {
+            bctx.beginPath();
+            bctx.ellipse(cx + s*fw*1.0, cy + fh*0.5 + j*fh*0.34, fw*0.28, fh*0.2, 0, 0, Math.PI*2);
+            bctx.fillStyle = j % 2 ? dark : c;
+            bctx.fill();
+          }
+        });
+        break;
+      case "pony":
+      case "buns":
+      case "topknot":
+      case "short":
+      default:
+        bctx.beginPath();
+        bctx.ellipse(cx, cy - fh*0.25, fw*1.15, fh*0.78, 0, 0, Math.PI*2);
+        bctx.fill();
+    }
+    // доп. детали спереди
+    if (state.hair === "pony") {
+      bctx.fillStyle = c;
+      bctx.beginPath();
+      bctx.ellipse(cx + fw*1.05, cy - fh*0.3, fw*0.4, fh*0.28, 0.5, 0, Math.PI*2);
+      bctx.fill();
+      bctx.beginPath();
+      bctx.moveTo(cx + fw*1.0, cy - fh*0.25);
+      bctx.quadraticCurveTo(cx + fw*1.7, cy + fh*0.2, cx + fw*1.3, cy + fh*0.9);
+      bctx.quadraticCurveTo(cx + fw*1.15, cy + fh*0.3, cx + fw*0.9, cy - fh*0.1);
+      bctx.closePath();
+      bctx.fill();
+    }
+    if (state.hair === "buns") {
+      bctx.fillStyle = c;
+      bctx.beginPath(); bctx.arc(cx - fw*0.85, cy - fh*0.95, fw*0.38, 0, Math.PI*2); bctx.fill();
+      bctx.beginPath(); bctx.arc(cx + fw*0.85, cy - fh*0.95, fw*0.38, 0, Math.PI*2); bctx.fill();
+    }
+    if (state.hair === "topknot") {
+      bctx.fillStyle = c;
+      bctx.beginPath(); bctx.arc(cx, cy - fh*1.25, fw*0.45, 0, Math.PI*2); bctx.fill();
+    }
+  }
+
+  function drawHairFront(cx, cy, fw, fh) {
+    var c = state.hairColor;
+    bctx.fillStyle = c;
+    // чёлка/верх волос
+    switch (state.hair) {
+      case "short":
+        bctx.beginPath();
+        bctx.moveTo(cx - fw*1.05, cy - fh*0.55);
+        bctx.quadraticCurveTo(cx, cy - fh*1.35, cx + fw*1.05, cy - fh*0.55);
+        bctx.quadraticCurveTo(cx + fw*0.7, cy - fh*0.75, cx + fw*0.2, cy - fh*0.8);
+        bctx.quadraticCurveTo(cx - fw*0.4, cy - fh*0.5, cx - fw*1.05, cy - fh*0.55);
+        bctx.fill();
+        break;
+      case "afro":
+        break;
+      case "long":
+      case "curls":
+      case "bob":
+      case "braids":
+      case "pony":
+      case "buns":
+      case "topknot":
+      default:
+        bctx.beginPath();
+        bctx.moveTo(cx - fw*1.08, cy - fh*0.35);
+        bctx.quadraticCurveTo(cx, cy - fh*1.4, cx + fw*1.08, cy - fh*0.35);
+        bctx.quadraticCurveTo(cx + fw*0.85, cy - fh*0.7, cx + fw*0.45, cy - fh*0.72);
+        bctx.quadraticCurveTo(cx + fw*0.1, cy - fh*0.45, cx - fw*0.15, cy - fh*0.72);
+        bctx.quadraticCurveTo(cx - fw*0.6, cy - fh*0.78, cx - fw*1.08, cy - fh*0.35);
+        bctx.fill();
+    }
+    // блик на волосах
+    bctx.fillStyle = "rgba(255,255,255,.18)";
+    bctx.beginPath();
+    bctx.ellipse(cx - fw*0.4, cy - fh*0.75, fw*0.5, fh*0.15, -0.5, 0, Math.PI*2);
+    bctx.fill();
+  }
+
+  /* ===================== РИСОВАНИЕ (макияж/краска) ===================== */
+  function getPos(e) {
+    var r = paint.getBoundingClientRect();
+    var cxp = e.touches ? e.touches[0].clientX : e.clientX;
+    var cyp = e.touches ? e.touches[0].clientY : e.clientY;
+    return { x: (cxp - r.left) / r.width * FACE_W, y: (cyp - r.top) / r.height * FACE_H };
+  }
+
+  function pushUndo() {
+    try {
+      undoStack.push(pctx.getImageData(0, 0, paint.width, paint.height));
+      if (undoStack.length > MAX_UNDO) undoStack.shift();
+    } catch (e) {}
+  }
+
+  function paintDot(x, y) {
+    var tool = state.tool;
+    var size = state.size;
+    if (tool === "eraser") {
+      pctx.save();
+      pctx.globalCompositeOperation = "destination-out";
+      pctx.beginPath(); pctx.arc(x, y, size, 0, Math.PI*2); pctx.fill();
+      pctx.restore();
+      return;
+    }
+    if (tool === "blush") {
+      var g = pctx.createRadialGradient(x, y, 1, x, y, size*2.2);
+      g.addColorStop(0, hexA(state.color, 0.35));
+      g.addColorStop(1, hexA(state.color, 0));
+      pctx.fillStyle = g;
+      pctx.beginPath(); pctx.arc(x, y, size*2.2, 0, Math.PI*2); pctx.fill();
+      return;
+    }
+    if (tool === "eyeshadow") {
+      var g2 = pctx.createRadialGradient(x, y, 1, x, y, size*1.8);
+      g2.addColorStop(0, hexA(state.color, 0.45));
+      g2.addColorStop(1, hexA(state.color, 0));
+      pctx.fillStyle = g2;
+      pctx.save();
+      pctx.globalCompositeOperation = "multiply";
+      pctx.beginPath(); pctx.arc(x, y, size*1.8, 0, Math.PI*2); pctx.fill();
+      pctx.restore();
+      return;
+    }
+    if (tool === "glitter") {
+      // блёстки
+      for (var i = 0; i < 4; i++) {
+        var gx = x + (Math.random()-0.5) * size * 2;
+        var gy = y + (Math.random()-0.5) * size * 2;
+        pctx.fillStyle = Math.random() < 0.5 ? "#fff" : state.color;
+        pctx.globalAlpha = 0.8;
+        pctx.beginPath(); pctx.arc(gx, gy, Math.random()*2.2+0.8, 0, Math.PI*2); pctx.fill();
+      }
+      pctx.globalAlpha = 1;
+      return;
+    }
+    // обычная кисть — мягкая
+    pctx.fillStyle = state.color;
+    pctx.globalAlpha = 0.85;
+    pctx.beginPath();
+    pctx.arc(x, y, size, 0, Math.PI*2);
+    pctx.fill();
+    pctx.globalAlpha = 1;
+  }
+
+  function paintLine(x0, y0, x1, y1) {
+    var dist = Math.hypot(x1-x0, y1-y0);
+    var steps = Math.max(1, Math.floor(dist / (state.size * 0.4)));
+    for (var i = 0; i <= steps; i++) {
+      var t = i / steps;
+      paintDot(x0 + (x1-x0)*t, y0 + (y1-y0)*t);
+    }
+  }
+
+  function hexA(hex, a) {
+    var c = hexToRgb(hex);
+    return "rgba(" + c.r + "," + c.g + "," + c.b + "," + a + ")";
+  }
+
+  /* ---- События рисования ---- */
+  function startDraw(e) {
+    e.preventDefault();
+    pushUndo();
+    isDrawing = true;
+    var p = getPos(e);
+    lastX = p.x; lastY = p.y;
+    paintDot(p.x, p.y);
+  }
+  function moveDraw(e) {
+    var p = getPos(e);
+    // курсор-кисть
+    brushCursor.style.display = "block";
+    var r = wrap.getBoundingClientRect();
+    var cxp = e.touches ? e.touches[0].clientX : e.clientX;
+    var cyp = e.touches ? e.touches[0].clientY : e.clientY;
+    brushCursor.style.left = (cxp - r.left) + "px";
+    brushCursor.style.top = (cyp - r.top) + "px";
+    var d = state.size * 2 * (paint.getBoundingClientRect().width / FACE_W);
+    brushCursor.style.width = d + "px";
+    brushCursor.style.height = d + "px";
+
+    if (!isDrawing) return;
+    e.preventDefault();
+    paintLine(lastX, lastY, p.x, p.y);
+    lastX = p.x; lastY = p.y;
+  }
+  function endDraw() { isDrawing = false; }
+
+  paint.addEventListener("mousedown", startDraw);
+  paint.addEventListener("mousemove", moveDraw);
+  window.addEventListener("mouseup", endDraw);
+  paint.addEventListener("mouseleave", function () { brushCursor.style.display = "none"; });
+  paint.addEventListener("touchstart", startDraw, { passive: false });
+  paint.addEventListener("touchmove", moveDraw, { passive: false });
+  paint.addEventListener("touchend", endDraw);
+
+  /* ===================== ПАНЕЛЬ ===================== */
+  function buildSwatches(container, colors, key, isObj) {
+    container.innerHTML = "";
+    colors.forEach(function (col, idx) {
+      var hex = isObj ? col.c : col;
+      var sw = document.createElement("div");
+      sw.className = "sw";
+      sw.style.background = hex;
+      if (state[key] === hex) sw.classList.add("active");
+      sw.addEventListener("click", function () {
+        state[key] = hex;
+        var kids = container.children;
+        for (var i = 0; i < kids.length; i++) kids[i].classList.remove("active");
+        sw.classList.add("active");
+        if (key === "eyeColor" || key === "hairColor" || key === "lipColor") redrawBase();
+        if (key === "color") updateBrush();
+      });
+      container.appendChild(sw);
+    });
+  }
+
+  // Инструменты
+  var toolBtns = document.getElementById("toolBtns");
+  toolBtns.addEventListener("click", function (e) {
+    var b = e.target.closest && e.target.closest(".tool");
+    if (!b) return;
+    state.tool = b.getAttribute("data-tool");
+    var all = toolBtns.querySelectorAll(".tool");
+    for (var i = 0; i < all.length; i++) all[i].classList.toggle("active", all[i] === b);
+    paint.classList.toggle("eraser", state.tool === "eraser");
+    document.getElementById("sizeGroup").style.display = (state.tool === "paint" || state.tool === "eraser") ? "" : "none";
+    updateBrush();
+  });
+
+  var sizeRange = document.getElementById("sizeRange");
+  var sizeVal = document.getElementById("sizeVal");
+  sizeRange.addEventListener("input", function () { state.size = +sizeRange.value; sizeVal.textContent = state.size; updateBrush(); });
+
+  function updateBrush() {
+    var col = state.tool === "eraser" ? "rgba(255,255,255,.5)" : state.color;
+    brushCursor.style.borderColor = state.tool === "eraser" ? "#888" : state.color;
+    brushCursor.style.background = state.tool === "eraser" ? "rgba(0,0,0,.1)" : hexA(state.color, .25);
+  }
+
+  // Палитры
+  buildSwatches(document.getElementById("swatches"), PAINT_COLORS, "color", false);
+  buildSwatches(document.getElementById("eyeSwatches"), EYE_COLORS, "eyeColor", false);
+  buildSwatches(document.getElementById("hairColors"), HAIR_COLORS, "hairColor", true);
+
+  // Помада
+  var lipCont = document.getElementById("lipSwatches");
+  buildSwatches(lipCont, LIP_COLORS, "lipColor", false);
+  document.getElementById("lipOff").addEventListener("click", function () {
+    state.lipColor = null;
+    var kids = lipCont.children; for (var i=0;i<kids.length;i++) kids[i].classList.remove("active");
+    redrawBase();
+  });
+
+  // Причёски
+  var hairGrid = document.getElementById("hairGrid");
+  HAIRSTYLES.forEach(function (h) {
+    var d = document.createElement("div");
+    d.className = "hairchoice" + (state.hair === h.id ? " active" : "");
+    d.innerHTML = '<svg viewBox="0 0 100 60">' + hairPreview(h.id) + '</svg><span>' + h.n + '</span>';
+    d.addEventListener("click", function () {
+      state.hair = h.id;
+      var kids = hairGrid.children; for (var i=0;i<kids.length;i++) kids[i].classList.remove("active");
+      d.classList.add("active");
+      redrawBase();
+    });
+    hairGrid.appendChild(d);
+  });
+  function hairPreview(id) {
+    var c = "#8b5a3a";
+    var s = '<circle cx="50" cy="34" r="16" fill="#f7cfae"/>';
+    switch (id) {
+      case "long": return s + '<path d="M28 34 Q28 10 50 10 Q72 10 72 34 L72 58 L64 58 L64 34 Q50 24 36 34 L36 58 L28 58 Z" fill="'+c+'"/>';
+      case "short": return s + '<path d="M30 32 Q30 10 50 10 Q70 10 70 32 Q60 20 50 22 Q40 20 30 32 Z" fill="'+c+'"/>';
+      case "pony": return s + '<path d="M30 32 Q30 10 50 10 Q70 10 70 32 Q58 18 50 20 Q40 20 30 32 Z" fill="'+c+'"/><path d="M70 26 Q86 34 78 52 Q72 40 66 34 Z" fill="'+c+'"/>';
+      case "buns": return s + '<circle cx="30" cy="18" r="11" fill="'+c+'"/><circle cx="70" cy="18" r="11" fill="'+c+'"/><path d="M30 32 Q30 12 50 12 Q70 12 70 32 Q58 22 50 22 Q42 22 30 32 Z" fill="'+c+'"/>';
+      case "curls": return s + '<circle cx="30" cy="26" r="11" fill="'+c+'"/><circle cx="70" cy="26" r="11" fill="'+c+'"/><circle cx="34" cy="46" r="10" fill="'+c+'"/><circle cx="66" cy="46" r="10" fill="'+c+'"/><path d="M28 30 Q28 8 50 8 Q72 8 72 30 Q58 18 50 18 Q42 18 28 30 Z" fill="'+c+'"/>';
+      case "afro": return '<circle cx="50" cy="30" r="26" fill="'+c+'"/>' + s;
+      case "bob": return s + '<path d="M28 34 Q28 10 50 10 Q72 10 72 34 L72 50 L62 50 L62 34 Q50 24 38 34 L38 50 L28 50 Z" fill="'+c+'"/>';
+      case "braids": return s + '<path d="M30 32 Q30 12 50 12 Q70 12 70 32 Q58 22 50 22 Q42 22 30 32 Z" fill="'+c+'"/><circle cx="30" cy="44" r="6" fill="'+c+'"/><circle cx="30" cy="54" r="6" fill="'+c+'"/><circle cx="70" cy="44" r="6" fill="'+c+'"/><circle cx="70" cy="54" r="6" fill="'+c+'"/>';
+      case "topknot": return s + '<circle cx="50" cy="10" r="9" fill="'+c+'"/><path d="M30 32 Q30 12 50 12 Q70 12 70 32 Q58 22 50 22 Q42 22 30 32 Z" fill="'+c+'"/>';
+    }
+    return s;
+  }
+
+  // Фон
+  var bgCont = document.getElementById("bgSwatches");
+  BGS.forEach(function (bg) {
+    var sw = document.createElement("div");
+    sw.className = "sw" + (state.bg === bg.id ? " active" : "");
+    sw.style.background = bg.css;
+    sw.title = bg.n;
+    sw.addEventListener("click", function () {
+      state.bg = bg.id;
+      var kids = bgCont.children; for (var i=0;i<kids.length;i++) kids[i].classList.remove("active");
+      sw.classList.add("active");
+      redrawBase();
+    });
+    bgCont.appendChild(sw);
+  });
+
+  /* ===================== КНОПКИ ===================== */
+  document.getElementById("btnClear").addEventListener("click", function () {
+    pushUndo();
+    pctx.clearRect(0, 0, FACE_W, FACE_H);
+    state.lipColor = null;
+    var kids = lipCont.children; for (var i=0;i<kids.length;i++) kids[i].classList.remove("active");
+    redrawBase();
+    toast("Макияж смыт 🧽");
+  });
+  document.getElementById("btnUndo").addEventListener("click", function () {
+    if (!undoStack.length) { toast("Нечего отменять"); return; }
+    var img = undoStack.pop();
+    pctx.save(); pctx.setTransform(1,0,0,1,0,0);
+    pctx.clearRect(0,0,paint.width,paint.height);
+    pctx.putImageData(img, 0, 0);
+    pctx.restore();
+    toast("Отменено ↩️");
+  });
+  document.getElementById("btnSave").addEventListener("click", function () {
+    // объединяем base + paint в один PNG
+    var out = document.createElement("canvas");
+    out.width = FACE_W * DPR; out.height = FACE_H * DPR;
+    var octx = out.getContext("2d");
+    octx.drawImage(base, 0, 0);
+    octx.drawImage(paint, 0, 0);
+    var link = document.createElement("a");
+    link.download = "Мой-образ.png";
+    link.href = out.toDataURL("image/png");
+    link.click();
+    toast("Образ сохранён! 📸");
+  });
+
+  /* ===================== TOAST ===================== */
+  var toastT = null;
+  function toast(text) {
+    toastEl.textContent = text;
+    toastEl.classList.add("show");
+    clearTimeout(toastT);
+    toastT = setTimeout(function () { toastEl.classList.remove("show"); }, 1800);
+  }
+
+  /* ===================== СТАРТ ===================== */
+  function showStart() {
+    overlay.classList.remove("hidden");
+    overlay.innerHTML =
+      '<div class="card">' +
+        '<h1>💄 Салон красоты</h1>' +
+        '<p>Создай свой образ! <b>Делай макияж, рисуй, меняй причёски и цвет волос.</b></p>' +
+        '<p style="font-size:14px">🖌️ рисуй кистью · 🌸 румяна · 👁️ тени · ✨ блёстки · 💇 9 причёсок · 🎨 цвет волос</p>' +
+        '<button id="startBtn">Открыть салон!</button>' +
+      '</div>';
+  }
+  overlay.addEventListener("click", function (e) {
+    if (e.target.closest && e.target.closest("button")) {
+      overlay.classList.add("hidden");
+      setupCanvas();
+      // стартовый макияж-подсказка
+      setTimeout(function () { toast("Выбери инструмент и рисуй по лицу 🎨"); }, 500);
+    }
+  });
+
+  window.addEventListener("resize", function () {
+    setupCanvas(true);
+  });
+
+  setupCanvas();
+  updateBrush();
+  showStart();
+})();
+</script>
+</body>
+</html>

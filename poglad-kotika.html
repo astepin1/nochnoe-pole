@@ -1,0 +1,732 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<title>Погладь котика 🐱</title>
+<style>
+  * { box-sizing: border-box; }
+  html, body {
+    margin: 0; height: 100%; overflow: hidden;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    -webkit-user-select: none; user-select: none;
+  }
+  #game { display: flex; flex-direction: column; height: 100%;
+    background: radial-gradient(circle at 50% 30%, #ffe6c7, #f7c9a3 55%, #e0a878 100%); }
+
+  /* ===== Панель ===== */
+  #hud {
+    display: flex; align-items: center; gap: 16px; padding: 10px 18px;
+    font-size: 14px; z-index: 5; flex-wrap: wrap; color: #6b3f1d;
+  }
+  #hud .item { white-space: nowrap; }
+  #hud .label { opacity: .7; margin-right: 5px; }
+  #hud .val { font-weight: 800; font-variant-numeric: tabular-nums; }
+  #hud .spacer { flex: 1; }
+
+  /* Настроение */
+  #moodWrap { display: flex; align-items: center; gap: 8px; }
+  #moodBar { position: relative; width: 220px; height: 18px; border-radius: 10px;
+    background: rgba(255,255,255,.6); box-shadow: inset 0 2px 5px rgba(120,70,30,.25);
+    overflow: hidden; }
+  #moodFill { height: 100%; width: 0%; border-radius: 10px;
+    background: linear-gradient(90deg,#ff9aa2,#ffc3a0,#ffd76e,#8fd96b);
+    background-size: 320px 100%;
+    transition: width .12s linear; }
+  #moodFace { font-size: 22px; }
+
+  /* Инструменты */
+  #tools { display: flex; gap: 6px; }
+  #tools button {
+    padding: 7px 14px; font-size: 14px; font-weight: 700; cursor: pointer;
+    border-radius: 10px; border: 2px solid #eab27a; background: rgba(255,255,255,.6);
+    color: #7a4a1d; transition: all .12s; font-family: inherit;
+  }
+  #tools button:hover { background: #fff3e0; }
+  #tools button.active {
+    background: linear-gradient(180deg,#ffb347,#f08a1d); color: #fff;
+    border-color: #d97c12; box-shadow: 0 3px 0 #c26a0d;
+  }
+
+  /* Шкала шерсти */
+  #furWrap { display: flex; align-items: center; gap: 8px; }
+  #furBar { position: relative; width: 140px; height: 18px; border-radius: 10px;
+    background: rgba(255,255,255,.6); box-shadow: inset 0 2px 5px rgba(120,70,30,.25);
+    overflow: hidden; }
+  #furFill { height: 100%; width: 100%; border-radius: 10px;
+    background: repeating-linear-gradient(45deg,#e0b078,#e0b078 6px,#cf9a5e 6px,#cf9a5e 12px);
+    transition: width .15s linear; }
+
+  /* ===== Сцена ===== */
+  #scene { position: relative; flex: 1; overflow: hidden;
+    display: flex; align-items: center; justify-content: center; touch-action: none; }
+
+  /* уютная комната */
+  #wall { position: absolute; inset: 0;
+    background: radial-gradient(circle at 50% 20%, #ffe9cf, #f6cb9f 60%, #e2b07e 100%); }
+  #floor { position: absolute; left: 0; right: 0; bottom: 0; height: 26%;
+    background: linear-gradient(180deg, #d9a06a, #c1854f 100%);
+    box-shadow: inset 0 10px 30px rgba(120,70,30,.25); }
+  #rug { position: absolute; left: 50%; bottom: 4%; width: 46%; height: 15%;
+    transform: translateX(-50%); border-radius: 50%;
+    background: radial-gradient(ellipse at 50% 40%, #f4a3a3, #e07f7f 70%);
+    box-shadow: 0 8px 24px rgba(120,50,50,.3); }
+  /* окошко */
+  #window { position: absolute; left: 7%; top: 10%; width: 150px; height: 190px;
+    border-radius: 14px; background: linear-gradient(180deg,#8fc9ff,#d3ecff);
+    border: 8px solid #f0d3ab; box-shadow: 0 10px 30px rgba(120,70,30,.25); }
+  #window::before, #window::after { content: ""; position: absolute; background: #f0d3ab; }
+  #window::before { left: 50%; top: 0; width: 8px; height: 100%; margin-left: -4px; }
+  #window::after { top: 50%; left: 0; height: 8px; width: 100%; margin-top: -4px; }
+  #window .sun2 { position: absolute; right: 16px; top: 16px; width: 40px; height: 40px;
+    border-radius: 50%; background: radial-gradient(circle,#fff7c8,#ffd76e);
+    box-shadow: 0 0 26px rgba(255,214,110,.9); }
+  /* клубок ниток */
+  #yarn { position: absolute; right: 12%; bottom: 12%; width: 54px; height: 54px;
+    border-radius: 50%; background: radial-gradient(circle at 35% 30%, #ff9ec4, #e0578f);
+    box-shadow: 0 6px 14px rgba(150,40,90,.35); }
+  #yarn::before { content: ""; position: absolute; inset: 10px; border-radius: 50%;
+    border: 3px dashed rgba(255,255,255,.6); }
+
+  /* ===== Котик ===== */
+  #catWrap { position: relative; width: min(66vmin, 560px); aspect-ratio: 420 / 400;
+    z-index: 3; }
+  #cat { width: 100%; height: 100%; display: block;
+    filter: drop-shadow(0 16px 22px rgba(120,70,30,.28)); }
+  .zone { cursor: grab; }
+  .zone:active { cursor: grabbing; }
+  #cat.petting { animation: breathe 1.4s ease-in-out infinite; }
+  @keyframes breathe { 0%,100% { transform: scale(1); } 50% { transform: scale(1.03); } }
+
+  /* Уши, хвост — живые */
+  #earL, #earR { transform-origin: 50% 90%; transition: transform .15s; }
+  #cat.annoyed #earL { transform: rotate(-18deg); }
+  #cat.annoyed #earR { transform: rotate(18deg); }
+  #tail { transform-origin: 350px 330px; animation: tailSway 3.2s ease-in-out infinite; }
+  @keyframes tailSway { 0%,100%{ transform: rotate(-5deg);} 50%{ transform: rotate(6deg);} }
+  #cat.happy #tail { animation-duration: 0.7s; }
+  #cat.annoyed #tail { animation-duration: 0.35s; }
+
+  /* Веки — для моргания и прищуренных глаз */
+  .lid { transform-origin: center; transform: scaleY(0); transition: transform .12s; }
+  #cat.happy .lid, #cat.sleepy .lid { transform: scaleY(1); }
+  /* Зрачки расширяются, когда гладят */
+  #cat.happy .pupil { transform: scale(1.25); }
+  .pupil { transition: transform .2s; transform-origin: center; }
+
+  /* Рот/брови */
+  #brows { opacity: 0; transition: opacity .15s; }
+  #cat.annoyed #brows { opacity: 1; }
+  #cat.annoyed #mouthHappy { opacity: 0; }
+  #mouthHappy { transition: opacity .15s; }
+
+  /* Сердечки и тексты */
+  .pop { position: absolute; pointer-events: none; z-index: 10; font-weight: 800;
+    animation: popUp .9s ease-out forwards; white-space: nowrap; }
+  .heart { font-size: 26px; }
+  .note { font-size: 22px; color: #b45bd0; }
+  .angry { font-size: 24px; color: #e04b4b; }
+  @keyframes popUp {
+    from { transform: translate(-50%,-50%) scale(.5); opacity: 1; }
+    to   { transform: translate(-50%,-200%) scale(1.3); opacity: 0; }
+  }
+  .sparkle { position: absolute; pointer-events: none; z-index: 9; color: #ffd76e;
+    font-size: 18px; animation: sparkle .6s ease-out forwards; }
+  @keyframes sparkle {
+    from { transform: translate(-50%,-50%) scale(.4) rotate(0); opacity: 1; }
+    to   { transform: translate(-50%,-50%) scale(1.3) rotate(120deg); opacity: 0; }
+  }
+  /* летящая шерсть */
+  .fur { position: absolute; pointer-events: none; z-index: 9; border-radius: 50%;
+    background: radial-gradient(circle at 35% 30%, #fff3e0, #e0b078);
+    box-shadow: 0 1px 3px rgba(120,70,30,.3);
+    animation: furFly 1s ease-out forwards; }
+  @keyframes furFly {
+    0%   { transform: translate(-50%,-50%) scale(.5) rotate(0); opacity: 1; }
+    100% { transform: translate(calc(-50% + var(--dx)), calc(-50% + var(--dy))) scale(1) rotate(260deg); opacity: 0; }
+  }
+  /* след щётки */
+  .brushmark { position: absolute; pointer-events: none; z-index: 8;
+    width: 40px; height: 26px; border-radius: 50%;
+    background: radial-gradient(ellipse, rgba(255,255,255,.55), rgba(255,255,255,0) 70%);
+    animation: bmark .5s ease-out forwards; }
+  @keyframes bmark { from { opacity: .8; } to { opacity: 0; transform: scale(1.3); } }
+  /* всплывающие числа */
+  .pts { position: absolute; pointer-events: none; z-index: 10; font-weight: 800;
+    color: #e07b1a; font-size: 18px; text-shadow: 0 1px 0 #fff;
+    animation: popUp .8s ease-out forwards; }
+
+  /* ===== Оверлей ===== */
+  #overlay { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center;
+    background: rgba(90,50,20,.6); backdrop-filter: blur(5px); z-index: 30;
+    text-align: center; padding: 20px; overflow: auto; }
+  #overlay.hidden { display: none; }
+  #overlay .card { max-width: 480px; width: 100%; padding: 32px 28px; border-radius: 24px;
+    background: linear-gradient(180deg,#fff6e6,#ffe1bd); border: 3px solid #f0c088;
+    box-shadow: 0 24px 60px rgba(90,40,10,.4); color: #6b3f1d; }
+  #overlay h1 { margin: 0 0 8px; font-size: 34px; color: #d9772b; }
+  #overlay p { margin: 10px 0; line-height: 1.6; font-size: 15px; }
+  #overlay .big { font-size: 48px; font-weight: 800; color: #e07b1a; margin: 4px 0; }
+  #overlay button { margin-top: 18px; padding: 15px 38px; font-size: 18px; font-weight: 800;
+    color: #fff; background: linear-gradient(180deg,#ffb347,#f08a1d); border: none;
+    border-radius: 16px; cursor: pointer; box-shadow: 0 7px 0 #c26a0d, 0 12px 24px rgba(0,0,0,.2);
+    transition: transform .08s, box-shadow .08s; }
+  #overlay button:hover { transform: translateY(-1px); }
+  #overlay button:active { transform: translateY(4px); box-shadow: 0 3px 0 #c26a0d; }
+  #overlay .row { display: flex; justify-content: center; gap: 26px; margin-top: 14px; flex-wrap: wrap; }
+  #overlay .row .col { opacity: .85; font-size: 13px; }
+  #overlay .row .col b { display: block; font-size: 26px; margin-top: 4px; color: #d9772b; }
+  #overlay .legend { display: flex; justify-content: center; gap: 18px; flex-wrap: wrap;
+    margin-top: 16px; font-size: 14px; }
+  #overlay .legend span { display: inline-flex; align-items: center; gap: 6px;
+    background: rgba(255,255,255,.55); padding: 6px 12px; border-radius: 999px; }
+</style>
+</head>
+<body>
+  <div id="game">
+    <div id="hud">
+      <div id="tools">
+        <button data-tool="hand" class="active">✋ Рука</button>
+        <button data-tool="brush">🧴 Щётка</button>
+      </div>
+      <div id="moodWrap">
+        <span class="label">Настроение</span>
+        <span id="moodBar"><span id="moodFill"></span></span>
+        <span id="moodFace">😺</span>
+      </div>
+      <div id="furWrap">
+        <span class="label">Вычесано</span>
+        <span id="furBar"><span id="furFill"></span></span>
+      </div>
+      <div class="item"><span class="label">Ласка:</span><span class="val" id="love">0</span></div>
+      <div class="spacer"></div>
+      <div class="item"><span class="label">Рекорд:</span><span class="val" id="best">0</span></div>
+    </div>
+
+    <div id="scene">
+      <div id="wall"></div>
+      <div id="floor"></div>
+      <div id="rug"></div>
+      <div id="window"><span class="sun2"></span></div>
+      <div id="yarn"></div>
+
+      <div id="catWrap">
+        <svg id="cat" viewBox="0 0 420 400">
+          <!-- ХВОСТ (не трогать!) -->
+          <path class="zone" data-zone="tail" data-good="0" style="pointer-events:stroke;"
+            d="M330 320 C 400 300, 405 210, 350 190 C 320 180, 300 205, 315 225 C 325 238, 345 230, 345 215"
+            fill="none" stroke="transparent" stroke-width="46" stroke-linecap="round"/>
+          <path id="tail"
+            d="M330 320 C 400 300, 405 210, 350 190 C 320 180, 300 205, 315 225 C 325 238, 345 230, 345 215"
+            fill="none" stroke="#f2b06a" stroke-width="24" stroke-linecap="round" pointer-events="none"/>
+
+          <!-- ТЕЛО (спинка — гладить!) -->
+          <ellipse class="zone" data-zone="body" data-good="1"
+            cx="210" cy="278" rx="118" ry="104" fill="#f2b06a"/>
+          <!-- полоски на спине -->
+          <path d="M150 215 q12 22 4 44" stroke="#d98f4c" stroke-width="10" fill="none" stroke-linecap="round" pointer-events="none"/>
+          <path d="M185 205 q12 24 4 48" stroke="#d98f4c" stroke-width="10" fill="none" stroke-linecap="round" pointer-events="none"/>
+          <path d="M235 205 q12 24 4 48" stroke="#d98f4c" stroke-width="10" fill="none" stroke-linecap="round" pointer-events="none"/>
+          <path d="M270 215 q12 22 4 44" stroke="#d98f4c" stroke-width="10" fill="none" stroke-linecap="round" pointer-events="none"/>
+
+          <!-- ЖИВОТ (не трогать!) -->
+          <ellipse class="zone" data-zone="belly" data-good="0"
+            cx="210" cy="306" rx="62" ry="70" fill="#ffe8c9"/>
+
+          <!-- лапки -->
+          <ellipse class="zone" data-zone="body" data-good="1" cx="160" cy="364" rx="34" ry="22" fill="#ffe8c9"/>
+          <ellipse class="zone" data-zone="body" data-good="1" cx="260" cy="364" rx="34" ry="22" fill="#ffe8c9"/>
+          <path d="M150 360 q10 8 20 0 M240 360 q10 8 20 0" stroke="#e0a878" stroke-width="3" fill="none" stroke-linecap="round" pointer-events="none"/>
+
+          <!-- ГОЛОВА (гладить!) -->
+          <g class="zone" data-zone="head" data-good="1">
+            <circle cx="210" cy="150" r="96" fill="#f2b06a"/>
+            <!-- ушки -->
+            <g id="earL" pointer-events="none"><path d="M132 92 L120 20 L192 74 Z" fill="#f2b06a"/><path d="M140 84 L133 44 L176 74 Z" fill="#ffb3a0"/></g>
+            <g id="earR" pointer-events="none"><path d="M288 92 L300 20 L228 74 Z" fill="#f2b06a"/><path d="M280 84 L287 44 L244 74 Z" fill="#ffb3a0"/></g>
+            <!-- полоски на лбу -->
+            <path d="M186 78 q10 16 2 32 M210 74 q10 16 2 34 M234 78 q10 16 2 32"
+              stroke="#d98f4c" stroke-width="9" fill="none" stroke-linecap="round" pointer-events="none"/>
+            <!-- щёчки -->
+            <ellipse cx="150" cy="176" rx="26" ry="18" fill="#ffcfae" opacity=".8" pointer-events="none"/>
+            <ellipse cx="270" cy="176" rx="26" ry="18" fill="#ffcfae" opacity=".8" pointer-events="none"/>
+
+            <!-- глаза -->
+            <g pointer-events="none">
+              <ellipse cx="172" cy="148" rx="21" ry="24" fill="#fff"/>
+              <ellipse cx="248" cy="148" rx="21" ry="24" fill="#fff"/>
+              <circle class="pupil" cx="172" cy="150" r="11" fill="#3a7d44"/>
+              <circle class="pupil" cx="248" cy="150" r="11" fill="#3a7d44"/>
+              <circle class="pupil" cx="172" cy="150" r="5" fill="#1e4425"/>
+              <circle class="pupil" cx="248" cy="150" r="5" fill="#1e4425"/>
+              <circle cx="176" cy="145" r="3.4" fill="#fff"/>
+              <circle cx="252" cy="145" r="3.4" fill="#fff"/>
+              <!-- веки -->
+              <ellipse class="lid" cx="172" cy="148" rx="22" ry="25" fill="#f2b06a"/>
+              <ellipse class="lid" cx="248" cy="148" rx="22" ry="25" fill="#f2b06a"/>
+              <path class="lid" d="M151 150 q21 16 42 0" stroke="#c9873f" stroke-width="4" fill="none" stroke-linecap="round"/>
+              <path class="lid" d="M227 150 q21 16 42 0" stroke="#c9873f" stroke-width="4" fill="none" stroke-linecap="round"/>
+            </g>
+
+            <!-- сердитые брови -->
+            <g id="brows" stroke="#b5642a" stroke-width="6" stroke-linecap="round" fill="none" pointer-events="none">
+              <path d="M152 120 L196 132"/>
+              <path d="M268 120 L224 132"/>
+            </g>
+
+            <!-- нос и рот -->
+            <path d="M210 178 l-9 -10 h18 z" fill="#e07b7b" pointer-events="none"/>
+            <path id="mouthHappy" d="M210 192 q-14 14 -26 2 M210 192 q14 14 26 2"
+              stroke="#c9873f" stroke-width="4" fill="none" stroke-linecap="round" pointer-events="none"/>
+            <!-- усы -->
+            <path d="M150 186 L96 176 M150 196 L98 202 M270 186 L324 176 M270 196 L322 202"
+              stroke="#e0c0a0" stroke-width="3" fill="none" stroke-linecap="round" pointer-events="none"/>
+          </g>
+        </svg>
+      </div>
+
+      <div id="overlay"></div>
+    </div>
+  </div>
+
+<script>
+(function () {
+  "use strict";
+
+  /* ===================== НАСТРОЙКИ ===================== */
+  var START_MOOD = 20;      // с какого настроения начинаем
+  var DECAY      = 3.2;     // как быстро настроение падает (в секунду)
+  var GOOD_GAIN  = 26;      // прирост от поглаживания (в секунду)
+  var BAD_LOSS   = 34;      // потеря от плохого места (в секунду)
+  var WIN_AT     = 100;     // цель — полное настроение
+  var BRUSH_GAIN = 22;      // сколько шерсти вычёсывается (в секунду)
+  /* ==================================================== */
+
+  var scene    = document.getElementById("scene");
+  var catWrap  = document.getElementById("catWrap");
+  var cat      = document.getElementById("cat");
+  var overlay  = document.getElementById("overlay");
+  var moodFill = document.getElementById("moodFill");
+  var moodFace = document.getElementById("moodFace");
+  var loveEl   = document.getElementById("love");
+  var bestEl   = document.getElementById("best");
+  var toolsEl  = document.getElementById("tools");
+  var furFill  = document.getElementById("furFill");
+
+  var playing = false;
+  var tool = "hand";                  // "hand" | "brush"
+  var mood = START_MOOD, love = 0;
+  var fur = 0;                        // вычесано шерсти (0..100)
+  var brushStroke = 0;                // накопление движения щёткой
+  var petting = false;
+  var lastZoneGood = null, annoyedT = 0, happyT = 0;
+  var rafId = null, lastTs = 0;
+  var lastPop = 0, lastPtsAt = 0;
+  var best = parseInt(localStorage.getItem("petcat_best") || "0", 10) || 0;
+  bestEl.textContent = best;
+
+  /* ===================== ЗВУК ===================== */
+  var audioCtx = null, purr = null;
+  function getAudio() {
+    if (!audioCtx) {
+      var AC = window.AudioContext || window.webkitAudioContext;
+      if (AC) audioCtx = new AC();
+    }
+    if (audioCtx && audioCtx.state === "suspended") audioCtx.resume();
+    return audioCtx;
+  }
+  function tone(freq, to, dur, type, vol, delay) {
+    var ac = getAudio(); if (!ac) return;
+    var t = ac.currentTime + (delay || 0);
+    var o = ac.createOscillator(); o.type = type || "sine";
+    o.frequency.setValueAtTime(freq, t);
+    if (to) o.frequency.exponentialRampToValueAtTime(Math.max(1, to), t + dur);
+    var g = ac.createGain();
+    g.gain.setValueAtTime(0.0001, t);
+    g.gain.exponentialRampToValueAtTime(vol || 0.2, t + 0.02);
+    g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+    o.connect(g); g.connect(ac.destination);
+    o.start(t); o.stop(t + dur + 0.06);
+  }
+  function sndMeow() {
+    tone(700, 1000, 0.12, "sine", 0.16);
+    tone(1100, 700, 0.25, "sine", 0.14, 0.12);
+  }
+  function sndHiss() {
+    var ac = getAudio(); if (!ac) return;
+    var t = ac.currentTime;
+    var buf = ac.createBuffer(1, Math.floor(ac.sampleRate * 0.4), ac.sampleRate);
+    var d = buf.getChannelData(0);
+    for (var i = 0; i < d.length; i++) d[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / d.length, 1.2);
+    var src = ac.createBufferSource(); src.buffer = buf;
+    var f = ac.createBiquadFilter(); f.type = "highpass"; f.frequency.value = 2500;
+    var g = ac.createGain(); g.gain.value = 0.18;
+    src.connect(f); f.connect(g); g.connect(ac.destination); src.start(t);
+  }
+  function sndBrush() {
+    // мягкое "шшш" щётки
+    var ac = getAudio(); if (!ac) return;
+    var t = ac.currentTime;
+    var buf = ac.createBuffer(1, Math.floor(ac.sampleRate * 0.18), ac.sampleRate);
+    var d = buf.getChannelData(0);
+    for (var i = 0; i < d.length; i++) d[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / d.length, 1.6);
+    var src = ac.createBufferSource(); src.buffer = buf;
+    var f = ac.createBiquadFilter(); f.type = "bandpass"; f.frequency.value = 3200; f.Q.value = 0.8;
+    var g = ac.createGain(); g.gain.value = 0.07;
+    src.connect(f); f.connect(g); g.connect(ac.destination); src.start(t);
+  }
+  function startPurr() {
+    var ac = getAudio(); if (!ac || purr) return;
+    var o = ac.createOscillator(); o.type = "sawtooth"; o.frequency.value = 26;
+    var f = ac.createBiquadFilter(); f.type = "lowpass"; f.frequency.value = 240;
+    var g = ac.createGain(); g.gain.value = 0.0;
+    // дрожание (мурчание)
+    var lfo = ac.createOscillator(); lfo.type = "sine"; lfo.frequency.value = 24;
+    var lg = ac.createGain(); lg.gain.value = 0.06;
+    lfo.connect(lg); lg.connect(g.gain);
+    g.gain.linearRampToValueAtTime(0.07, ac.currentTime + 0.25);
+    o.connect(f); f.connect(g); g.connect(ac.destination);
+    o.start(); lfo.start();
+    purr = { o: o, lfo: lfo, g: g };
+  }
+  function stopPurr() {
+    if (!purr) return;
+    var ac = getAudio();
+    try {
+      purr.g.gain.cancelScheduledValues(ac.currentTime);
+      purr.g.gain.setValueAtTime(purr.g.gain.value, ac.currentTime);
+      purr.g.gain.linearRampToValueAtTime(0, ac.currentTime + 0.2);
+      purr.o.stop(ac.currentTime + 0.3);
+      purr.lfo.stop(ac.currentTime + 0.3);
+    } catch (e) {}
+    purr = null;
+  }
+
+  /* ===================== ВСПЛЕСКИ ===================== */
+  function pop(x, y, text, cls) {
+    var el = document.createElement("div");
+    el.className = "pop " + (cls || "heart");
+    el.textContent = text;
+    el.style.left = x + "px"; el.style.top = y + "px";
+    scene.appendChild(el);
+    setTimeout(function () { el.remove(); }, 900);
+  }
+  function sparkle(x, y) {
+    var s = document.createElement("div");
+    s.className = "sparkle";
+    s.textContent = "✦";
+    s.style.left = x + "px"; s.style.top = y + "px";
+    scene.appendChild(s);
+    setTimeout(function () { s.remove(); }, 600);
+  }
+  function floatPts(x, y, v) {
+    var el = document.createElement("div");
+    el.className = "pts";
+    el.textContent = "+" + v;
+    el.style.left = x + "px"; el.style.top = y + "px";
+    scene.appendChild(el);
+    setTimeout(function () { el.remove(); }, 800);
+  }
+
+  /* ===================== НАСТРОЕНИЕ ===================== */
+  function updateMoodUI() {
+    moodFill.style.width = Math.max(0, Math.min(100, mood)) + "%";
+    var f;
+    if (mood >= 85) f = "😻";
+    else if (mood >= 60) f = "😸";
+    else if (mood >= 35) f = "😺";
+    else if (mood >= 15) f = "🙀";
+    else f = "😾";
+    moodFace.textContent = f;
+  }
+
+  /* ===================== ГЛАЖЕНЬЕ / ВЫЧЁСЫВАНИЕ ===================== */
+  var lastStrokeAt = 0;
+  function stroke(good, x, y, onCat) {
+    if (!playing) return;
+    if (!onCat) return;                 // курсор не на котике — нейтрально
+
+    var now = performance.now();
+    var dt = lastStrokeAt ? Math.min((now - lastStrokeAt) / 1000, 0.2) : 0.06;
+    lastStrokeAt = now;
+
+    if (tool === "brush") {
+      brushStroke += 1;
+      // след щётки
+      brushMark(x, y);
+      if (good) {
+        mood = Math.min(100, mood + GOOD_GAIN * dt);
+        // вычёсываем шерсть
+        var gained = BRUSH_GAIN * dt;
+        fur = Math.min(100, fur + gained);
+        furFill.style.width = fur + "%";
+        love += Math.max(1, Math.round(gained));
+        loveEl.textContent = love;
+        // летит шерсть
+        if (brushStroke % 2 === 0) flyFur(x, y);
+        if (now - lastPop > 260) {
+          lastPop = now;
+          sndBrush();
+        }
+        happyT = 0.5;
+        cat.classList.remove("annoyed");
+        startPurr();
+      } else {
+        annoyedT = 1.0;
+        stopPurr();
+        if (now - lastPop > 400) { lastPop = now; sndHiss(); }
+        pop(x, y - 10, "😾", "angry");
+      }
+      updateMoodUI();
+      if (fur >= 100) fluffyWin();
+      return;
+    }
+
+    // ==== рука ====
+    var d = (good ? GOOD_GAIN : -BAD_LOSS) * dt;
+    mood = Math.max(0, Math.min(100, mood + d));
+
+    if (good) {
+      love += Math.max(1, Math.round(d));
+      loveEl.textContent = love;
+      if (now - lastPop > 150) {
+        lastPop = now;
+        pop(x + (Math.random() * 30 - 15), y - 10,
+            Math.random() < 0.5 ? "❤️" : (Math.random() < 0.5 ? "💛" : "💕"));
+        if (Math.random() < 0.35) sparkle(x + (Math.random() * 40 - 20), y);
+      }
+      happyT = 0.5;
+      cat.classList.remove("annoyed");
+      startPurr();
+    } else {
+      annoyedT = 1.0;
+      stopPurr();
+      if (now - lastPop > 400) { lastPop = now; sndHiss(); }
+      pop(x, y - 10, "😾", "angry");
+    }
+    updateMoodUI();
+  }
+
+  // Шерсть, летящая от щётки
+  function flyFur(x, y) {
+    for (var i = 0; i < 3; i++) {
+      var f = document.createElement("div");
+      f.className = "fur";
+      var s = 5 + Math.random() * 6;
+      f.style.width = s + "px"; f.style.height = s + "px";
+      f.style.left = x + "px"; f.style.top = y + "px";
+      f.style.setProperty("--dx", (Math.random() * 120 - 60) + "px");
+      f.style.setProperty("--dy", (-30 - Math.random() * 70) + "px");
+      scene.appendChild(f);
+      (function (node) { setTimeout(function () { node.remove(); }, 1000); })(f);
+    }
+  }
+  function brushMark(x, y) {
+    var b = document.createElement("div");
+    b.className = "brushmark";
+    b.style.left = x + "px"; b.style.top = y + "px";
+    scene.appendChild(b);
+    (function (node) { setTimeout(function () { node.remove(); }, 500); })(b);
+  }
+
+  // Определяем зону под курсором
+  function zoneUnder(clientX, clientY) {
+    // ищем .zone в точке (SVG или обычный элемент)
+    var el = document.elementFromPoint(clientX, clientY);
+    while (el && el !== document.body) {
+      if (el.classList && el.classList.contains("zone")) return el;
+      el = el.parentElement;
+    }
+    return null;
+  }
+
+  // Переключение инструмента
+  toolsEl.addEventListener("click", function (e) {
+    var btn = e.target.closest && e.target.closest("button");
+    if (!btn) return;
+    setTool(btn.getAttribute("data-tool"));
+  });
+  function setTool(t) {
+    tool = t;
+    var btns = toolsEl.querySelectorAll("button");
+    for (var i = 0; i < btns.length; i++) {
+      btns[i].classList.toggle("active", btns[i].getAttribute("data-tool") === t);
+    }
+    scene.style.cursor = t === "brush" ? "cell" : "default";
+  }
+
+  scene.addEventListener("pointerdown", function (e) {
+    if (!playing) return;
+    e.preventDefault();
+    getAudio();
+    petting = true;
+    lastStrokeAt = 0;
+    var z = zoneUnder(e.clientX, e.clientY);
+    var r = scene.getBoundingClientRect();
+    stroke(z ? z.getAttribute("data-good") === "1" : false, e.clientX - r.left, e.clientY - r.top, !!z);
+  });
+
+  scene.addEventListener("pointermove", function (e) {
+    if (!playing || !petting) return;
+    var z = zoneUnder(e.clientX, e.clientY);
+    var r = scene.getBoundingClientRect();
+    stroke(z ? z.getAttribute("data-good") === "1" : false, e.clientX - r.left, e.clientY - r.top, !!z);
+  });
+
+  window.addEventListener("pointerup", function () { petting = false; });
+  window.addEventListener("pointercancel", function () { petting = false; });
+
+  /* ===================== ЦИКЛ ===================== */
+  function frame(ts) {
+    if (!playing) return;
+    var dt = lastTs ? Math.min((ts - lastTs) / 1000, 0.05) : 0.016;
+    lastTs = ts;
+
+    // настроение падает, если не гладят
+    var wasPettingGood = petting && !cat.classList.contains("annoyed");
+    mood = Math.max(0, mood - DECAY * dt);
+
+    // состояния
+    if (annoyedT > 0) {
+      annoyedT -= dt;
+      cat.classList.add("annoyed");
+      cat.classList.remove("happy");
+      if (annoyedT <= 0) cat.classList.remove("annoyed");
+    } else if (petting && !cat.classList.contains("annoyed")) {
+      happyT = 0.4;
+      cat.classList.add("happy");
+      cat.classList.add("petting");
+      if (!purr) startPurr();
+    } else {
+      if (happyT > 0) happyT -= dt;
+      else cat.classList.remove("happy");
+      cat.classList.remove("petting");
+      stopPurr();
+    }
+
+    updateMoodUI();
+
+    if (mood >= WIN_AT) { winGame(); return; }
+    rafId = requestAnimationFrame(frame);
+  }
+
+  /* ===================== ЭКРАНЫ ===================== */
+  function showStart() {
+    overlay.classList.remove("hidden");
+    overlay.innerHTML =
+      '<div class="card">' +
+        '<h1>🐱 Котик и щётка</h1>' +
+        '<p><b>✋ Рукой</b> — гладь котика по голове и спинке: он мурчит и радуется.</p>' +
+        '<p><b>🧴 Щёткой</b> — вычёсывай шерсть: летит пух, а котик балдеет. Собери <b>100%</b> шерсти!</p>' +
+        '<div class="legend">' +
+          '<span>😺 голову и спинку — можно</span>' +
+          '<span>😾 животик и хвост — нельзя!</span>' +
+        '</div>' +
+        '<p style="margin-top:14px;font-size:13px;opacity:.8">Смена инструмента — кнопки сверху. Не трогать котика нельзя: он заскучает и настроение упадёт.</p>' +
+        '<button id="startBtn">Начать!</button>' +
+      '</div>';
+  }
+
+  function winGame() {
+    playing = false;
+    stopPurr();
+    cat.classList.add("happy");
+    cat.classList.remove("petting");
+    updateMoodUI();
+    sndMeow();
+    // салют из сердечек
+    for (var i = 0; i < 24; i++) {
+      (function (k) {
+        setTimeout(function () {
+          pop(Math.random() * scene.clientWidth, scene.clientHeight * 0.4 + Math.random() * 120,
+              ["❤️","💛","💕","💖","💗"][Math.floor(Math.random()*5)]);
+        }, k * 55);
+      })(i);
+    }
+    saveBest();
+    setTimeout(function () {
+      overlay.classList.remove("hidden");
+      overlay.innerHTML =
+        '<div class="card">' +
+          '<h1>😻 Котик доволен!</h1>' +
+          '<p>Ты погладил котика до полного счастья! Он мурчит и жмурится.</p>' +
+          '<div class="big">' + love + '</div>' +
+          '<p style="margin-top:-4px">ласки</p>' +
+          '<div class="row">' +
+            '<div class="col">Рекорд<b>' + best + '</b></div>' +
+          '</div>' +
+          '<button id="startBtn">Ещё раз</button>' +
+        '</div>';
+    }, 700);
+  }
+
+  // Победа вычёсыванием — котик стал пушистым и довольным
+  function fluffyWin() {
+    if (!playing) return;
+    playing = false;
+    stopPurr();
+    cat.classList.add("happy");
+    cat.classList.remove("petting");
+    updateMoodUI();
+    sndMeow();
+    // летит много шерсти
+    for (var i = 0; i < 40; i++) {
+      (function (k) {
+        setTimeout(function () {
+          flyFur(Math.random() * scene.clientWidth, scene.clientHeight * 0.45 + Math.random() * 140);
+        }, k * 35);
+      })(i);
+    }
+    saveBest();
+    setTimeout(function () {
+      overlay.classList.remove("hidden");
+      overlay.innerHTML =
+        '<div class="card">' +
+          '<h1>🧴 Котик вычесан!</h1>' +
+          '<p>Ты вычесал всю лишнюю шерсть — котик стал гладким, пушистым и очень довольным! Он мурчит.</p>' +
+          '<div class="big">' + love + '</div>' +
+          '<p style="margin-top:-4px">ласки</p>' +
+          '<div class="row">' +
+            '<div class="col">Шерсти собрано<b>100%</b></div>' +
+            '<div class="col">Рекорд<b>' + best + '</b></div>' +
+          '</div>' +
+          '<button id="startBtn">Ещё раз</button>' +
+        '</div>';
+    }, 700);
+  }
+
+  function saveBest() {
+    var isRecord = love > best;
+    if (isRecord) { best = love; localStorage.setItem("petcat_best", String(best)); }
+    bestEl.textContent = best;
+  }
+
+  /* ===================== СТАРТ ===================== */
+  function startGame() {
+    getAudio();
+    if (rafId) cancelAnimationFrame(rafId);
+    mood = START_MOOD; love = 0; loveEl.textContent = 0;
+    fur = 0; furFill.style.width = "0%"; brushStroke = 0;
+    petting = false; annoyedT = 0; happyT = 0;
+    cat.classList.remove("annoyed", "happy", "petting");
+    updateMoodUI();
+    overlay.classList.add("hidden");
+    playing = true;
+    lastTs = 0;
+    rafId = requestAnimationFrame(frame);
+  }
+
+  overlay.addEventListener("click", function (e) {
+    var btn = e.target.closest && e.target.closest("button");
+    if (btn) startGame();
+  });
+  document.addEventListener("keydown", function (e) {
+    if (!playing && (e.key === " " || e.key === "Enter")) { e.preventDefault(); startGame(); }
+  });
+
+  updateMoodUI();
+  showStart();
+})();
+</script>
+</body>
+</html>

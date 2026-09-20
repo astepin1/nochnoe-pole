@@ -2,19 +2,121 @@
 <html lang="ru">
 <head>
 <meta charset="utf-8">
-<meta http-equiv="refresh" content="0; url=nochnoe-pole.html">
-<title>Ночное поле</title>
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Мои игры 🎮</title>
 <style>
-  html,body{margin:0;height:100%;background:#02030a;color:#e8ecf2;
-    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;
-    display:flex;align-items:center;justify-content:center;text-align:center}
-  a{color:#ff8a6b;font-weight:700}
+  * { box-sizing: border-box; }
+  html, body { margin: 0; min-height: 100%; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    background: radial-gradient(circle at 50% 0%, #2a2050, #14102a 55%, #0a0818 100%);
+    color: #eef0ff; padding: 32px 18px 60px;
+  }
+  h1 {
+    text-align: center; margin: 0 0 6px; font-size: 38px; letter-spacing: .02em;
+    background: linear-gradient(90deg,#ffd28a,#ff8fc0,#8fe0ff,#8dffb4);
+    -webkit-background-clip: text; background-clip: text; -webkit-text-fill-color: transparent;
+  }
+  .sub { text-align: center; opacity: .6; margin: 0 0 30px; font-size: 15px; }
+  .grid {
+    max-width: 1000px; margin: 0 auto;
+    display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 16px;
+  }
+  .card {
+    display: block; text-decoration: none; color: inherit;
+    background: linear-gradient(160deg, rgba(255,255,255,.09), rgba(255,255,255,.03));
+    border: 1px solid rgba(255,255,255,.14); border-radius: 18px;
+    padding: 18px 18px 16px; transition: transform .14s, box-shadow .18s, border-color .18s;
+    position: relative; overflow: hidden;
+  }
+  .card:hover {
+    transform: translateY(-4px); border-color: rgba(255,180,220,.5);
+    box-shadow: 0 16px 40px rgba(120,60,180,.35);
+  }
+  .emoji { font-size: 34px; line-height: 1; }
+  .name { font-size: 18px; font-weight: 800; margin: 10px 0 4px; }
+  .desc { font-size: 13px; opacity: .72; line-height: 1.45; min-height: 38px; }
+  .tag {
+    display: inline-block; margin-top: 10px; font-size: 11px; font-weight: 700;
+    padding: 4px 10px; border-radius: 999px;
+    background: rgba(160,120,255,.22); border: 1px solid rgba(180,150,255,.35);
+  }
+  .tag.new { background: rgba(120,255,190,.2); border-color: rgba(140,255,200,.45); color: #9dffcc; }
+  .url {
+    display: block; margin-top: 10px; font-size: 11px; opacity: .45;
+    font-family: ui-monospace, Menlo, monospace; word-break: break-all;
+  }
+  footer { text-align: center; opacity: .45; font-size: 12px; margin-top: 40px; }
+
+  /* список ссылок текстом */
+  .list { max-width: 1000px; margin: 46px auto 0; }
+  .list h2 { font-size: 18px; opacity: .85; border-bottom: 1px solid rgba(255,255,255,.12); padding-bottom: 8px; }
+  .list ol { padding-left: 22px; line-height: 2; font-size: 14px; }
+  .list a { color: #9fd0ff; text-decoration: none; }
+  .list a:hover { text-decoration: underline; }
+  .list .nm { color: #fff; font-weight: 700; margin-right: 6px; }
 </style>
 </head>
 <body>
-  <div>
-    <h1>НОЧНОЕ ПОЛЕ</h1>
-    <p>Загружаю игру… Если ничего не происходит — <a href="nochnoe-pole.html">нажми сюда</a>.</p>
+  <h1>🎮 Мои игры</h1>
+  <p class="sub">Выбери игру и играй — просто нажми на карточку</p>
+
+  <div class="grid" id="grid"></div>
+
+  <div class="list">
+    <h2>Список ссылок (для копирования)</h2>
+    <ol id="linkList"></ol>
   </div>
+
+  <footer>Все игры работают в браузере — на компьютере и телефоне 📱</footer>
+
+<script>
+  var GAMES = [
+    { file: "kotiki-parizha.html", emoji: "🗼🐱", name: "Котики у Эйфелевой башни",
+      desc: "3D-прогулка: корми рыбкой котиков, они бегают и разговаривают. Можно бегать (Shift).", tag: "3D", isNew: true },
+    { file: "parkur.html", emoji: "👹🏃", name: "Паркур: убеги от монстра",
+      desc: "Беги по крышам, прыгай через пропасти. За тобой гонится страшный монстр!", tag: "Экшн", isNew: true },
+    { file: "salon-krasoty.html", emoji: "💄🎨", name: "Салон красоты",
+      desc: "Делай макияж, рисуй красками, меняй причёски и цвет волос, сохраняй образ.", tag: "Творчество", isNew: true },
+    { file: "massazh.html", emoji: "🕯️💆", name: "Массаж в SPA",
+      desc: "Растирай спину маслом, разминай зажатые узелки. Клиент лежит на столе.", tag: "Релакс", isNew: true },
+    { file: "poglad-kotika.html", emoji: "🐱🧴", name: "Погладь и вычеши котика",
+      desc: "Гладь котика рукой или вычёсывай щёткой. Не трогай животик и хвост!", tag: "Милые", isNew: true },
+    { file: "homyaki.html", emoji: "🐹🌾", name: "Хомяки на поле",
+      desc: "Тир на ровном поле: кликай по хомякам, которые выглядывают из норок.", tag: "Тир", isNew: true },
+    { file: "nochnoe-pole.html", emoji: "🌾👽", name: "Ночное поле",
+      desc: "Хоррор от первого лица: ночное поле, фонарь, страшные пришельцы. 5 видов оружия.", tag: "Хоррор" },
+    { file: "oborona-zemli.html", emoji: "🌍🔫", name: "Оборона Земли (FPS)",
+      desc: "Реалистичный шутер от первого лица: отстреливай пришельцев бластером.", tag: "Шутер" },
+    { file: "prishelcy-3d.html", emoji: "🌌👾", name: "3D Вторжение",
+      desc: "Пришельцы летят прямо на тебя из глубины космоса. Целься мышкой и стреляй.", tag: "3D" },
+    { file: "vtorzhenie.html", emoji: "👽🛸", name: "Вторжение",
+      desc: "2D оборона: пришельцы спускаются к Земле, щит, волны, боссы.", tag: "Аркада" },
+    { file: "tir-pro.html", emoji: "🎯✨", name: "Тир PRO",
+      desc: "Мишени с бонусами: золотые, бомбы, заморозка. Очки, комбо, рекорды.", tag: "Тир" },
+    { file: "tir.html", emoji: "🎯", name: "Тир",
+      desc: "Простой тир: кликай по мишеням. Чем меньше мишень — тем больше очков.", tag: "Тир" }
+  ];
+
+  var grid = document.getElementById("grid");
+  var list = document.getElementById("linkList");
+
+  GAMES.forEach(function (g) {
+    var a = document.createElement("a");
+    a.className = "card";
+    a.href = g.file;
+    a.innerHTML =
+      '<div class="emoji">' + g.emoji + '</div>' +
+      '<div class="name">' + g.name + '</div>' +
+      '<div class="desc">' + g.desc + '</div>' +
+      '<span class="tag' + (g.isNew ? ' new' : '') + '">' + (g.isNew ? 'новинка' : g.tag) + '</span>' +
+      '<span class="url">' + g.file + '</span>';
+    grid.appendChild(a);
+
+    var li = document.createElement("li");
+    li.innerHTML = '<span class="nm">' + g.name + '</span> — <a href="' + g.file + '">' + g.file + '</a>';
+    list.appendChild(li);
+  });
+</script>
 </body>
 </html>
