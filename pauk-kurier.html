@@ -342,7 +342,8 @@
     if (k === "arrowright" || k === "d" || k === "в") keys.right = true;
     if (k === "arrowup" || k === "w" || k === "ц") keys.up = true;
     if (k === "arrowdown" || k === "s" || k === "ы") keys.down = true;
-    if (k === " " || k === "shift") { e.preventDefault(); attachWeb(); }
+    if (k === " ") { e.preventDefault(); if (!e.repeat) toggleWeb(); }
+    if (k === "shift") { e.preventDefault(); toggleWeb(); }
     if (k === "e" || k === "у") { e.preventDefault(); action(); }
     if (!running && (e.key === " " || e.key === "Enter")) { e.preventDefault(); startGame(); }
   });
@@ -352,18 +353,17 @@
     if (k === "arrowright" || k === "d" || k === "в") keys.right = false;
     if (k === "arrowup" || k === "w" || k === "ц") keys.up = false;
     if (k === "arrowdown" || k === "s" || k === "ы") keys.down = false;
-    if (k === " " || k === "shift") releaseWeb();
   });
 
   canvas.addEventListener("mousedown", function (e) {
     if (!running) return;
     if (isMobile) return;
-    if (e.button === 0) attachWeb();
+    if (e.button === 0) toggleWeb();
     if (e.button === 2) action();
   });
   window.addEventListener("mouseup", function (e) {
     if (isMobile) return;
-    if (e.button === 0) releaseWeb();
+    // мышь тоже работает как переключатель — отпускание не сбрасывает паутину
   });
   canvas.addEventListener("contextmenu", function (e) { e.preventDefault(); });
 
@@ -409,10 +409,15 @@
     el.addEventListener("mousedown", function (e) { if (isMobile) return; e.preventDefault(); down(); });
     el.addEventListener("mouseup", function (e) { if (isMobile) return; e.preventDefault(); if (up) up(); });
   }
-  bindBtn("btnWeb", function () { attachWeb(); }, function () { releaseWeb(); });
+  bindBtn("btnWeb", function () { toggleWeb(); });
   bindBtn("btnDrop", function () { action(); });
 
   /* ---------------------- Паутина ---------------------- */
+  function toggleWeb() {
+    if (!running || paused) return;
+    if (player.attached) releaseWeb();
+    else attachWeb();
+  }
   function attachWeb() {
     if (!running || paused) return;
     if (player.attached) return;
@@ -1066,13 +1071,14 @@
     overlay.classList.remove("hidden");
     var keysHtml = isMobile
       ? '<div class="keys">' +
-          '<div><span class="key">🕸️</span> кнопка — выстрелить паутиной (держать = качаться)</div>' +
+          '<div><span class="key">🕸️</span> кнопка — бросить паутину (нажми ещё раз — отпустить)</div>' +
           '<div><span class="key">📦</span> кнопка — взять/доставить (или подлетни ближе)</div>' +
           '<div><span class="key">🕹️</span> джойстик — рулить в полёте</div>' +
         '</div>'
       : '<div class="keys">' +
-          '<div><span class="key">ЛКМ</span> или <span class="key">ПРОБЕЛ</span> — стрелять паутиной (держать = качаться)</div>' +
-          '<div><span class="key">Отпустить</span> — полетели!</div>' +
+          '<div><span class="key">ПРОБЕЛ</span> — бросить паутину 🕸️</div>' +
+          '<div><span class="key">ПРОБЕЛ</span> ещё раз — отпустить и полететь</div>' +
+          '<div><span class="key">ЛКМ</span> — тоже работает</div>' +
           '<div><span class="key">W</span><span class="key">S</span> — подтянуть/удлинить трос</div>' +
           '<div><span class="key">A</span><span class="key">D</span> — рулить в полёте</div>' +
           '<div><span class="key">E</span> или <span class="key">ПКМ</span> — взять/доставить посылку</div>' +
