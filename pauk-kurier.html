@@ -26,14 +26,8 @@
   #delivered { color: #8dffb4; }
   #hud .spacer { flex: 1; }
 
-  /* Паутина (вместо топлива) */
+  /* Паутина (бесконечная) */
   #webWrap { display: flex; align-items: center; gap: 8px; }
-  #webBar { width: 130px; height: 14px; border-radius: 8px; background: rgba(255,255,255,.15);
-    overflow: hidden; box-shadow: inset 0 1px 3px rgba(0,0,0,.4); }
-  #webFill { height: 100%; width: 100%; border-radius: 8px;
-    background: linear-gradient(90deg,#8fd0ff,#e8f4ff); transition: width .15s linear; }
-  #webFill.low { background: linear-gradient(90deg,#ff5a5a,#ff9a3c); animation: pulse .6s infinite alternate; }
-  @keyframes pulse { from { opacity: .5; } to { opacity: 1; } }
 
   /* ===== Сцена ===== */
   #arena { position: relative; flex: 1; overflow: hidden; background: #1a1030; touch-action: none; }
@@ -121,7 +115,7 @@
       <div class="item"><span class="label">Доставлено</span><span class="val" id="delivered">0</span></div>
       <div class="item"><span class="label">Груз</span><span class="val" id="cargo">—</span></div>
       <div class="item" id="webWrap"><span class="label">Паутина</span>
-        <span id="webBar"><span id="webFill"></span></span></div>
+        <span style="font-weight:800;color:#8fe0ff">∞ бесконечная</span></div>
       <div class="spacer"></div>
       <div class="item"><span class="label">Очки</span><span class="val" id="score">0</span></div>
       <div class="item"><span class="label">Рекорд</span><span class="val" id="best">0</span></div>
@@ -153,9 +147,6 @@
   var WEB_RANGE   = 640;     // дальность паутины
   var WEB_REEL    = 220;     // скорость подтягивания (сокращение троса)
   var MIN_ROPE    = 90;      // минимальная длина троса
-  var WEB_MAX     = 100;     // запас паутины
-  var WEB_USE     = 18;      // расход за выстрел
-  var WEB_REGEN   = 12;      // восстановление в секунду
   var WORLD_W     = 6000;    // ширина города
   var GROUND_Y    = 1250;    // уровень земли
   var WALL_JUMP   = 620;
@@ -169,7 +160,6 @@
   var cargoEl = document.getElementById("cargo");
   var scoreEl = document.getElementById("score");
   var bestEl  = document.getElementById("best");
-  var webFill = document.getElementById("webFill");
   var taskEl = document.getElementById("task");
   var arrowEl = document.getElementById("arrow");
   var dmgEl = document.getElementById("dmg");
@@ -205,7 +195,6 @@
   var birds = [];
 
   var delivered = 0, score = 0, carrying = false;
-  var web = WEB_MAX;
   var timeNow = 0, lastTs = 0, rafId = null;
   var shakeT = 0, shakeMag = 0;
   var combo = 0;
@@ -342,7 +331,6 @@
       attached: false, anchor: null, ropeLen: 0,
       facing: 1, anim: 0, swingPhase: 0, wallSlide: 0
     };
-    web = WEB_MAX;
     carrying = false;
     camX = player.x - W / 2; camY = player.y - H / 2;
   }
@@ -428,7 +416,6 @@
   function attachWeb() {
     if (!running || paused) return;
     if (player.attached) return;
-    if (web < WEB_USE * 0.4) { sndEmpty(); flashTask("Паутина кончилась! 😰"); return; }
 
     // выбор лучшей точки крепления
     var facing = player.vx >= 0.5 ? 1 : (player.vx <= -0.5 ? -1 : player.facing);
@@ -451,7 +438,6 @@
     player.attached = true;
     player.anchor = bestA;
     player.ropeLen = Math.max(MIN_ROPE, dist(player.x, player.y, bestA.x, bestA.y));
-    web = Math.max(0, web - WEB_USE);
     sndShoot();
     burst(bestA.x, bestA.y, "#e8f4ff", 6);
     updateHUD();
@@ -479,7 +465,6 @@
   function pickup(p) {
     p.done = true;
     carrying = true;
-    web = Math.min(WEB_MAX, web + 30);
     sndPickup();
     burst(p.x, p.y, "#ffd76e", 14);
     flashTask("Посылка взята! Доставь её 📦");
@@ -542,8 +527,7 @@
     timeNow += dt;
     var p = player;
 
-    // восстановление паутины
-    if (!p.attached) web = Math.min(WEB_MAX, web + WEB_REGEN * dt);
+    // восстановление паутины (паутина бесконечна — ничего не тратится)
 
     // ==== горизонтальное управление ====
     var dir = (keys.right ? 1 : 0) - (keys.left ? 1 : 0);
@@ -651,9 +635,9 @@
       if (rg.got) continue;
       if (dist(p.x, p.y, rg.x, rg.y) < 50) {
         rg.got = true;
-        score += 40; web = Math.min(WEB_MAX, web + 25);
+        score += 40;
         sndRing(); burst(rg.x, rg.y, "#8fe0ff", 12);
-        flashTask("Кольцо! +40 · паутина +25 🕸️");
+        flashTask("Кольцо! +40 ✨");
         updateHUD();
       }
     }
@@ -1075,8 +1059,6 @@
     scoreEl.textContent = score;
     cargoEl.textContent = carrying ? "📦 есть" : "—";
     cargoEl.style.color = carrying ? "#ffd76e" : "#fff";
-    webFill.style.width = clamp(web, 0, 100) + "%";
-    webFill.className = web < 25 ? "low" : "";
   }
 
   /* ---------------------- Экраны ---------------------- */
@@ -1099,7 +1081,7 @@
       '<div class="card">' +
         '<h1>🕷️ ПАУК-КУРЬЕР</h1>' +
         '<p>Ты — супергерой-курьер. <b>Стреляй паутиной в небоскрёбы</b> и качайся между ними, как Человек-паук!</p>' +
-        '<p>Забери посылку 🏭 и доставь её в дом 🏠. Собирай кольца, следи за запасом паутины 🕸️.</p>' +
+        '<p>Забери посылку 🏭 и доставь её в дом 🏠. Собирай кольца — паутина у тебя <b>бесконечная</b> 🕸️.</p>' +
         keysHtml +
         '<div class="legend">' +
           '<span>🎯 тянись к ярким точкам — там крепится паутина</span>' +
