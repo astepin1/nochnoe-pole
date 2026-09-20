@@ -508,8 +508,8 @@
     if (!el) return;
     el.addEventListener("touchstart", function (e) { e.preventDefault(); el.classList.add("press"); down(); }, { passive: false });
     el.addEventListener("touchend", function (e) { e.preventDefault(); el.classList.remove("press"); if (up) up(); }, { passive: false });
-    el.addEventListener("mousedown", function (e) { e.preventDefault(); down(); });
-    el.addEventListener("mouseup", function (e) { e.preventDefault(); if (up) up(); });
+    el.addEventListener("mousedown", function (e) { if (isMobile) return; e.preventDefault(); down(); });
+    el.addEventListener("mouseup", function (e) { if (isMobile) return; e.preventDefault(); if (up) up(); });
   }
   bindBtn("btnToss", function () { tossFood(); });
   bindBtn("btnFeed", function () { feedNearby(); });
