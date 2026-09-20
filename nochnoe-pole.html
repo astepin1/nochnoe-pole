@@ -141,6 +141,30 @@
   #overlay .row { display: flex; justify-content: center; gap: 24px; margin-top: 14px; flex-wrap: wrap; }
   #overlay .row .col { opacity: .9; font-size: 11px; text-transform: uppercase; letter-spacing: .07em; }
   #overlay .row .col b { display: block; font-size: 23px; margin-top: 4px; color: #fff; letter-spacing: 0; }
+
+  /* ===== Мобильное управление ===== */
+  #mobile { position: absolute; inset: 0; z-index: 16; pointer-events: none; display: none; }
+  #mobile.on { display: block; }
+  #joy { position: absolute; left: 20px; bottom: 24px; width: 140px; height: 140px;
+    border-radius: 50%; pointer-events: auto;
+    background: radial-gradient(circle, rgba(255,255,255,.12), rgba(255,255,255,.04));
+    border: 2px solid rgba(255,255,255,.28); touch-action: none; }
+  #joyKnob { position: absolute; left: 50%; top: 50%; width: 60px; height: 60px;
+    margin: -30px 0 0 -30px; border-radius: 50%;
+    background: radial-gradient(circle at 40% 35%, #ffd0b0, #c86a4a);
+    box-shadow: 0 4px 12px rgba(0,0,0,.5); }
+  .mbtn { position: absolute; pointer-events: auto; border-radius: 50%;
+    display: flex; align-items: center; justify-content: center;
+    background: rgba(255,255,255,.14); border: 2px solid rgba(255,255,255,.32);
+    color: #fff; backdrop-filter: blur(3px); touch-action: none;
+    box-shadow: 0 4px 12px rgba(0,0,0,.4); user-select: none; }
+  .mbtn.press { background: rgba(255,90,60,.55); transform: scale(.94); }
+  #btnFire { right: 22px; bottom: 34px; width: 96px; height: 96px; font-size: 40px; }
+  #btnRun  { right: 128px; bottom: 40px; width: 66px; height: 66px; font-size: 26px; }
+  #btnReload { right: 30px; bottom: 142px; width: 60px; height: 60px; font-size: 24px; }
+  #btnSwap { right: 128px; bottom: 120px; width: 56px; height: 56px; font-size: 20px; }
+  #lookHint { position: absolute; left: 50%; top: 42%; transform: translateX(-50%);
+    font-size: 12px; opacity: .45; color: #fff; text-align: center; pointer-events: none; }
 </style>
 </head>
 <body>
@@ -164,6 +188,14 @@
       <div id="scare"></div>
       <div id="wbar"></div>
       <div id="hint">W A S D — бежать &nbsp;•&nbsp; Мышь — осмотреться &nbsp;•&nbsp; ЛКМ — выстрел &nbsp;•&nbsp; 1-5 / колесо — оружие</div>
+      <div id="mobile">
+        <div id="joy"><div id="joyKnob"></div></div>
+        <div class="mbtn" id="btnFire">🔥</div>
+        <div class="mbtn" id="btnRun">🏃</div>
+        <div class="mbtn" id="btnReload">↻</div>
+        <div class="mbtn" id="btnSwap">🔫</div>
+        <div id="lookHint">проведи пальцем, чтобы осмотреться</div>
+      </div>
       <div id="overlay"></div>
     </div>
   </div>
@@ -1129,8 +1161,9 @@
     // ==== Движение ====
     var fwd = (keys["w"] ? 1 : 0) - (keys["s"] ? 1 : 0);
     var strafe = (keys["d"] ? 1 : 0) - (keys["a"] ? 1 : 0);
-    var moving = (fwd !== 0 || strafe !== 0);
-    var sprinting = keys["shift"] && fwd > 0;
+    if (joyActive) { fwd += -joyDY * 1.4; strafe += joyDX * 1.4; fwd = clamp(fwd, -1, 1); strafe = clamp(strafe, -1, 1); }
+    var moving = (Math.abs(fwd) > 0.06 || Math.abs(strafe) > 0.06);
+    var sprinting = (keys["shift"] || runHold) && fwd > 0.1;
     var speed = sprinting ? RUN_SPEED : WALK_SPEED;
 
     if (moving) {
@@ -1579,6 +1612,21 @@
       }
       board += "</div>";
     }
+    var keysHtml = isMobile
+      ? '<div class="keys">' +
+          '<div><span class="key">🕹️</span> джойстик — бежать</div>' +
+          '<div><span class="key">👆</span> свайп по экрану — осмотреться</div>' +
+          '<div><span class="key">🔥</span> кнопка — стрелять</div>' +
+          '<div><span class="key">🏃</span> бежать быстрее</div>' +
+          '<div><span class="key">↻</span> перезарядка · <span class="key">🔫</span> сменить оружие</div>' +
+        '</div>'
+      : '<div class="keys">' +
+          '<div><span class="key">W A S D</span> бежать по полю</div>' +
+          '<div><span class="key">Мышь</span> смотреть по сторонам</div>' +
+          '<div><span class="key">ЛКМ</span> стрелять</div>' +
+          '<div><span class="key">Shift</span> бежать быстрее</div>' +
+          '<div><span class="key">R</span> перезарядка</div>' +
+        '</div>';
     overlay.innerHTML =
       '<div class="card">' +
         '<h1>НОЧНОЕ ПОЛЕ</h1>' +
@@ -1591,19 +1639,11 @@
         '</div>' +
         '<h2 style="margin-top:6px">Оружие</h2>' +
         '<div style="font-size:12px;opacity:.85;line-height:1.9;margin-top:6px">' +
-          '<div><span class="key">1</span> ПИСТОЛЕТ &nbsp; <span class="key">2</span> ПП «ОСА» &nbsp; <span class="key">3</span> ДРОБОВИК</div>' +
-          '<div><span class="key">4</span> ВИНТОВКА &nbsp; <span class="key">5</span> ОГНЕМЁТ</div>' +
-          '<div style="opacity:.7;margin-top:4px">Смена оружия: <span class="key">Q</span> <span class="key">E</span> или колёсико мыши</div>' +
+          '<div>🎯Пистолет · 💥ПП «Оса» · 🅱️Дробовик · 🔭Винтовка · 🔥Огнемёт</div>' +
         '</div>' +
-        '<div class="keys">' +
-          '<div><span class="key">W A S D</span> бежать по полю</div>' +
-          '<div><span class="key">Мышь</span> смотреть по сторонам</div>' +
-          '<div><span class="key">ЛКМ</span> стрелять</div>' +
-          '<div><span class="key">Shift</span> бежать быстрее</div>' +
-          '<div><span class="key">R</span> перезарядка</div>' +
-        '</div>' +
+        keysHtml +
         '<div style="margin-top:16px"><button id="startBtn">НАЧАТЬ</button></div>' +
-        '<p style="margin-top:12px;font-size:11px;opacity:.5">Мышь захватится для обзора. Esc — пауза.</p>' +
+        (isMobile ? '' : '<p style="margin-top:12px;font-size:11px;opacity:.5">Мышь захватится для обзора. Esc — пауза.</p>') +
         board +
       '</div>';
   }
@@ -1682,13 +1722,87 @@
   }
 
   function requestLock() {
+    if (isMobile) return;
     try {
       var p = canvas.requestPointerLock();
       if (p && p.catch) p.catch(function () {});
     } catch (e) {}
   }
 
+  /* ====================== МОБИЛЬНОЕ УПРАВЛЕНИЕ ====================== */
+  var isMobile = ("ontouchstart" in window) || navigator.maxTouchPoints > 0;
+  var mobileEl = document.getElementById("mobile");
+  var joyEl = document.getElementById("joy");
+  var joyKnob = document.getElementById("joyKnob");
+  var joyActive = false, joyId = null, joyCX = 0, joyCY = 0, joyDX = 0, joyDY = 0;
+  var runHold = false;
+  var lookId = null, lookLastX = 0, lookLastY = 0;
+  if (isMobile) mobileEl.classList.add("on");
+
+  joyEl.addEventListener("touchstart", function (e) {
+    e.preventDefault();
+    var t = e.changedTouches[0];
+    joyActive = true; joyId = t.identifier;
+    var r = joyEl.getBoundingClientRect();
+    joyCX = r.left + r.width / 2; joyCY = r.top + r.height / 2;
+    updateJoy(t.clientX, t.clientY);
+  }, { passive: false });
+  function updateJoy(x, y) {
+    var dx = x - joyCX, dy = y - joyCY, max = 56, len = Math.hypot(dx, dy);
+    if (len > max) { dx = dx / len * max; dy = dy / len * max; }
+    joyKnob.style.transform = "translate(" + dx + "px," + dy + "px)";
+    joyDX = dx / max; joyDY = dy / max;
+  }
+  window.addEventListener("touchmove", function (e) {
+    for (var i = 0; i < e.changedTouches.length; i++) {
+      var t = e.changedTouches[i];
+      if (t.identifier === joyId) { e.preventDefault(); updateJoy(t.clientX, t.clientY); return; }
+    }
+  }, { passive: false });
+  window.addEventListener("touchend", function (e) {
+    for (var i = 0; i < e.changedTouches.length; i++) {
+      if (e.changedTouches[i].identifier === joyId) {
+        joyActive = false; joyId = null; joyDX = 0; joyDY = 0;
+        joyKnob.style.transform = "translate(0,0)";
+      }
+    }
+  });
+
+  // свайп-обзор
+  canvas.addEventListener("touchstart", function (e) {
+    if (!running || paused) return;
+    var t = e.changedTouches[0];
+    lookId = t.identifier; lookLastX = t.clientX; lookLastY = t.clientY;
+  }, { passive: true });
+  canvas.addEventListener("touchmove", function (e) {
+    if (!running || paused) return;
+    for (var i = 0; i < e.changedTouches.length; i++) {
+      var t = e.changedTouches[i];
+      if (t.identifier !== lookId) continue;
+      var dx = t.clientX - lookLastX, dy = t.clientY - lookLastY;
+      lookLastX = t.clientX; lookLastY = t.clientY;
+      yaw += dx * 0.005;
+      pitch -= dy * 0.004;
+      pitch = clamp(pitch, -0.85, 0.7);
+    }
+  }, { passive: true });
+  canvas.addEventListener("touchend", function () { lookId = null; }, { passive: true });
+
+  function bindBtn(id, down, up) {
+    var el = document.getElementById(id);
+    if (!el) return;
+    el.addEventListener("touchstart", function (e) { e.preventDefault(); el.classList.add("press"); down(); }, { passive: false });
+    el.addEventListener("touchend", function (e) { e.preventDefault(); el.classList.remove("press"); if (up) up(); }, { passive: false });
+    el.addEventListener("mousedown", function (e) { e.preventDefault(); down(); });
+    el.addEventListener("mouseup", function (e) { e.preventDefault(); if (up) up(); });
+  }
+  bindBtn("btnFire", function () { firing = true; lastFire = 0; }, function () { firing = false; });
+  bindBtn("btnRun", function () { runHold = true; }, function () { runHold = false; });
+  bindBtn("btnReload", function () { startReload(); });
+  bindBtn("btnSwap", function () { cycleWeapon(1); });
+
   document.addEventListener("pointerlockchange", function () {
+    if (isMobile) return;
     pointerLocked = (document.pointerLockElement === canvas);
     if (running) {
       paused = !pointerLocked;
@@ -1777,9 +1891,17 @@
     if (btn.dataset.fear !== undefined) {
       SCARY = btn.dataset.fear === "1";
       try { localStorage.setItem("nightfield_scary", SCARY ? "1" : "0"); } catch (er) {}
-      showStart();                 // перерисовать кнопки
+      showStart();
       return;
     }
+    if (btn.dataset.action === "menu") showStart();
+    else startGame();
+  });
+  overlay.addEventListener("touchend", function (e) {
+    var btn = e.target.closest && e.target.closest("button");
+    if (!btn) return;
+    e.preventDefault();
+    if (btn.dataset.fear !== undefined) { SCARY = btn.dataset.fear === "1"; try { localStorage.setItem("nightfield_scary", SCARY ? "1" : "0"); } catch (er) {} showStart(); return; }
     if (btn.dataset.action === "menu") showStart();
     else startGame();
   });

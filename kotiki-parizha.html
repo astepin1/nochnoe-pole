@@ -77,6 +77,29 @@
     background: rgba(255,255,255,.08); padding: 6px 12px; border-radius: 999px; }
   #overlay .legend { display: flex; gap: 18px; justify-content: center; flex-wrap: wrap;
     margin-top: 16px; font-size: 13px; opacity: .9; }
+
+  /* ===== Мобильное управление ===== */
+  #mobile { position: absolute; inset: 0; z-index: 14; pointer-events: none; display: none; }
+  #mobile.on { display: block; }
+  #joy { position: absolute; left: 22px; bottom: 26px; width: 140px; height: 140px;
+    border-radius: 50%; pointer-events: auto;
+    background: radial-gradient(circle, rgba(255,255,255,.14), rgba(255,255,255,.05));
+    border: 2px solid rgba(255,255,255,.3); touch-action: none; }
+  #joyKnob { position: absolute; left: 50%; top: 50%; width: 62px; height: 62px;
+    margin: -31px 0 0 -31px; border-radius: 50%;
+    background: radial-gradient(circle at 40% 35%, #ffe6c7, #e8a86a);
+    box-shadow: 0 4px 12px rgba(0,0,0,.4); }
+  .mbtn { position: absolute; pointer-events: auto; width: 76px; height: 76px; border-radius: 50%;
+    display: flex; align-items: center; justify-content: center; font-size: 30px;
+    background: rgba(255,255,255,.16); border: 2px solid rgba(255,255,255,.35);
+    color: #fff; backdrop-filter: blur(3px); touch-action: none;
+    box-shadow: 0 4px 12px rgba(0,0,0,.35); user-select: none; }
+  .mbtn:active, .mbtn.press { background: rgba(255,180,80,.55); transform: scale(.94); }
+  #btnToss { right: 22px; bottom: 30px; }
+  #btnFeed { right: 110px; bottom: 96px; }
+  #btnRun  { right: 22px; bottom: 120px; width: 64px; height: 64px; font-size: 24px; }
+  #lookHint { position: absolute; right: 24px; top: 40%; transform: translateY(-50%);
+    font-size: 12px; opacity: .5; color: #fff; text-align: center; width: 120px; }
 </style>
 </head>
 <body>
@@ -94,6 +117,13 @@
     <div id="arena">
       <canvas id="view"></canvas>
       <div id="vig"></div>
+      <div id="mobile">
+        <div id="joy"><div id="joyKnob"></div></div>
+        <div class="mbtn" id="btnToss">🐟</div>
+        <div class="mbtn" id="btnFeed">✋</div>
+        <div class="mbtn" id="btnRun">🏃</div>
+        <div id="lookHint">проведи пальцем,<br>чтобы осмотреться</div>
+      </div>
       <div id="overlay"></div>
     </div>
   </div>
@@ -385,6 +415,7 @@
 
   canvas.addEventListener("mousedown", function (e) {
     if (!running) return;
+    if (isMobile) { if (e.button === 0) tossFood(); return; }
     if (paused) { requestLock(); return; }
     if (!pointerLocked) { requestLock(); return; }
     if (e.button === 0) tossFood();
@@ -392,6 +423,7 @@
   canvas.addEventListener("contextmenu", function (e) { e.preventDefault(); });
 
   document.addEventListener("pointerlockchange", function () {
+    if (isMobile) return;               // на телефоне захват мыши не нужен
     pointerLocked = (document.pointerLockElement === canvas);
     if (running) {
       paused = !pointerLocked;
@@ -401,9 +433,90 @@
     }
   });
   function requestLock() {
+    if (isMobile) return;               // не захватываем мышь на телефоне
     try { var p = canvas.requestPointerLock(); if (p && p.catch) p.catch(function(){}); } catch (e) {}
   }
 
+  /* ====================== МОБИЛЬНОЕ УПРАВЛЕНИЕ ====================== */
+  var isMobile = ("ontouchstart" in window) || navigator.maxTouchPoints > 0;
+  var mobileEl = document.getElementById("mobile");
+  var joyEl = document.getElementById("joy");
+  var joyKnob = document.getElementById("joyKnob");
+  var joyActive = false, joyId = null, joyCX = 0, joyCY = 0, joyDX = 0, joyDY = 0;
+  var runHold = false;
+  var lookId = null, lookLastX = 0, lookLastY = 0;
+
+  if (isMobile) {
+    mobileEl.classList.add("on");
+  }
+
+  // --- Джойстик (ходьба) ---
+  joyEl.addEventListener("touchstart", function (e) {
+    e.preventDefault();
+    var t = e.changedTouches[0];
+    joyActive = true; joyId = t.identifier;
+    var r = joyEl.getBoundingClientRect();
+    joyCX = r.left + r.width / 2; joyCY = r.top + r.height / 2;
+    updateJoy(t.clientX, t.clientY);
+  }, { passive: false });
+  function updateJoy(x, y) {
+    var dx = x - joyCX, dy = y - joyCY;
+    var max = 56;
+    var len = Math.hypot(dx, dy);
+    if (len > max) { dx = dx / len * max; dy = dy / len * max; }
+    joyKnob.style.transform = "translate(" + dx + "px," + dy + "px)";
+    joyDX = dx / max; joyDY = dy / max;
+  }
+  window.addEventListener("touchmove", function (e) {
+    for (var i = 0; i < e.changedTouches.length; i++) {
+      var t = e.changedTouches[i];
+      if (t.identifier === joyId) { e.preventDefault(); updateJoy(t.clientX, t.clientY); return; }
+    }
+  }, { passive: false });
+  window.addEventListener("touchend", function (e) {
+    for (var i = 0; i < e.changedTouches.length; i++) {
+      if (e.changedTouches[i].identifier === joyId) {
+        joyActive = false; joyId = null; joyDX = 0; joyDY = 0;
+        joyKnob.style.transform = "translate(0,0)";
+      }
+    }
+  });
+
+  // --- Свайп по экрану (обзор) ---
+  canvas.addEventListener("touchstart", function (e) {
+    if (!running) return;
+    var t = e.changedTouches[0];
+    lookId = t.identifier; lookLastX = t.clientX; lookLastY = t.clientY;
+  }, { passive: true });
+  canvas.addEventListener("touchmove", function (e) {
+    if (!running || paused) return;
+    for (var i = 0; i < e.changedTouches.length; i++) {
+      var t = e.changedTouches[i];
+      if (t.identifier !== lookId) continue;
+      var dx = t.clientX - lookLastX, dy = t.clientY - lookLastY;
+      lookLastX = t.clientX; lookLastY = t.clientY;
+      yaw += dx * 0.005;
+      pitch -= dy * 0.004;
+      pitch = clamp(pitch, -0.95, 0.6);
+    }
+  }, { passive: true });
+  canvas.addEventListener("touchend", function () { lookId = null; }, { passive: true });
+
+  // --- Кнопки действий ---
+  function bindBtn(id, down, up) {
+    var el = document.getElementById(id);
+    if (!el) return;
+    el.addEventListener("touchstart", function (e) { e.preventDefault(); el.classList.add("press"); down(); }, { passive: false });
+    el.addEventListener("touchend", function (e) { e.preventDefault(); el.classList.remove("press"); if (up) up(); }, { passive: false });
+    el.addEventListener("mousedown", function (e) { e.preventDefault(); down(); });
+    el.addEventListener("mouseup", function (e) { e.preventDefault(); if (up) up(); });
+  }
+  bindBtn("btnToss", function () { tossFood(); });
+  bindBtn("btnFeed", function () { feedNearby(); });
+  bindBtn("btnRun", function () { runHold = true; }, function () { runHold = false; });
+
+  // Автозахват не нужен на мобильном — убираем паузу из-за pointerlock
+  
   /* ====================== ДЕЙСТВИЯ ====================== */
   function tossFood() {
     if (!running || paused) return;
@@ -461,9 +574,11 @@
     // ---- движение игрока ----
     var fwd = (keys["w"] ? 1 : 0) - (keys["s"] ? 1 : 0);
     var strafe = (keys["d"] ? 1 : 0) - (keys["a"] ? 1 : 0);
-    var moving = (fwd !== 0 || strafe !== 0);
-    // бег: если зажат Shift и есть силы
-    var wantRun = keys["shift"] && moving && stamina > 1;
+    // джойстик (мобильный)
+    if (joyActive) { fwd += -joyDY * 1.4; strafe += joyDX * 1.4; fwd = clamp(fwd, -1, 1); strafe = clamp(strafe, -1, 1); }
+    var moving = (Math.abs(fwd) > 0.06 || Math.abs(strafe) > 0.06);
+    // бег: если зажат Shift (или кнопка 🏃) и есть силы
+    var wantRun = (keys["shift"] || runHold) && moving && stamina > 1;
     isRunning = wantRun;
     if (wantRun) stamina = Math.max(0, stamina - STAMINA_USE * dt);
     else stamina = Math.min(STAMINA_MAX, stamina + STAMINA_REG * dt);
@@ -481,8 +596,6 @@
       camZ = clamp(camZ, -PLAZA, Z_MAX);
       walkPhase += dt * (isRunning ? 14 : 8.5);
       bobAmp += ((isRunning ? 0.07 : 0.035) - bobAmp) * Math.min(1, dt * 6);
-      // небольшой наклон/тряска при беге
-      if (isRunning && Math.random() < dt * 8) { /* footsteps */ }
     } else {
       bobAmp += (0 - bobAmp) * Math.min(1, dt * 6);
       walkPhase += dt * 1.2;
@@ -1418,26 +1531,35 @@
   /* ====================== ЭКРАНЫ ====================== */
   function showStart() {
     overlay.classList.remove("hidden");
+    var keysHtml = isMobile
+      ? '<div class="keys">' +
+          '<div><span class="key">🕹️</span> джойстик — идти</div>' +
+          '<div><span class="key">👆</span> свайп по экрану — осмотреться</div>' +
+          '<div><span class="key">🐟</span> бросить рыбку</div>' +
+          '<div><span class="key">✋</span> покормить котика рядом</div>' +
+          '<div><span class="key">🏃</span> бежать (тратит силы)</div>' +
+        '</div>'
+      : '<div class="keys">' +
+          '<div><span class="key">W A S D</span> идти по полю</div>' +
+          '<div><span class="key">Shift</span> 🏃 бежать (тратит силы)</div>' +
+          '<div><span class="key">Мышь</span> осматриваться</div>' +
+          '<div><span class="key">Пробел</span> бросить рыбку</div>' +
+          '<div><span class="key">F</span> покормить котика рядом</div>' +
+        '</div>';
     overlay.innerHTML =
       '<div class="card">' +
         '<h1>🐱 Котики у Эйфелевой башни</h1>' +
         '<p>День в Париже. Ты гуляешь по <b>Марсову полю прямо у подножия Эйфелевой башни</b>,<br>' +
         'а вокруг бегают котики. <b>Покорми их рыбкой!</b></p>' +
         '<p>Кидай рыбок — котики почуют и прибегут со всех ног. Они едят, мурчат и разговаривают.</p>' +
-        '<div class="keys">' +
-          '<div><span class="key">W A S D</span> идти по полю</div>' +
-          '<div><span class="key">Shift</span> 🏃 бежать (тратит силы)</div>' +
-          '<div><span class="key">Мышь</span> осматриваться</div>' +
-          '<div><span class="key">Пробел</span> бросить рыбку</div>' +
-          '<div><span class="key">F</span> покормить котика рядом</div>' +
-        '</div>' +
+        keysHtml +
         '<div class="cats">' +
           '<span>🗼 Эйфелева башня рядом</span>' +
           '<span>🐟 Кинь рыбку — бегут со всех ног</span>' +
           '<span>💬 Котики разговаривают</span>' +
         '</div>' +
         '<button id="startBtn">В Париж!</button>' +
-        '<p style="margin-top:14px;font-size:12px;opacity:.55">Мышь захватится для обзора. Esc — пауза.</p>' +
+        (isMobile ? '' : '<p style="margin-top:14px;font-size:12px;opacity:.55">Мышь захватится для обзора. Esc — пауза.</p>') +
       '</div>';
   }
 
