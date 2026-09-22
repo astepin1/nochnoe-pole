@@ -434,12 +434,14 @@
 
     p.anim += dt * (Math.abs(dir) > 0 ? 10 : 3);
 
-    // ---- препятствия ----
+    // ---- препятствия (можно перепрыгнуть сверху!) ----
     for (var oi = 0; oi < obstacles.length; oi++) {
       var ob = obstacles[oi];
-      if (p.x + 0.5 > ob.x && p.x - 0.5 < ob.x + ob.w &&
-          p.y < ob.top + ob.h && p.y > ob.top - 1 && hurtCd <= 0) {
-        // врезались
+      var obTop = ob.top - ob.h;      // верх препятствия (меньше y = выше)
+      // задеваем, только если ноги НИЖЕ верхушки препятствия (не перепрыгнули)
+      if (p.x + 0.45 > ob.x && p.x - 0.45 < ob.x + ob.w &&
+          p.y > obTop + 0.15 && p.y < ob.top + 0.4 && hurtCd <= 0) {
+        // врезались (не перепрыгнули)
         hurtCd = 0.9;
         slowT = 0.7;
         sndHit();
@@ -695,17 +697,24 @@
   function drawObstacle(ob) {
     if (ob.x + ob.w < camX - 40 || ob.x > camX + 40) return;
     var zN = ob.z, zF = ob.z + ob.d;
-    var top = ob.top + ob.h;
+    var baseY = ob.top;                 // стоит на крыше
+    var topY = ob.top - ob.h;           // верх препятствия (выше крыши)
     // передняя грань
-    quad(project(ob.x, top, zN), project(ob.x + ob.w, top, zN),
-         project(ob.x + ob.w, ob.top, zN), project(ob.x, ob.top, zN), "#5a4a3a");
-    // верх
-    quad(project(ob.x, top, zN), project(ob.x + ob.w, top, zN),
-         project(ob.x + ob.w, top, zF), project(ob.x, top, zF), "#8a6a4a");
-    // полоски
-    ctx.strokeStyle = "rgba(255,215,110,.7)"; ctx.lineWidth = 2;
-    var a = project(ob.x + ob.w * 0.2, top, zN), b = project(ob.x + ob.w * 0.2, ob.top, zN);
+    quad(project(ob.x, topY, zN), project(ob.x + ob.w, topY, zN),
+         project(ob.x + ob.w, baseY, zN), project(ob.x, baseY, zN), "#5a4a3a");
+    // верхняя грань
+    quad(project(ob.x, topY, zN), project(ob.x + ob.w, topY, zN),
+         project(ob.x + ob.w, topY, zF), project(ob.x, topY, zF), "#8a6a4a");
+    // предупреждающие полоски
+    ctx.strokeStyle = "rgba(255,215,110,.75)"; ctx.lineWidth = 2;
+    var a = project(ob.x + ob.w * 0.25, topY, zN), b = project(ob.x + ob.w * 0.25, baseY, zN);
     ctx.beginPath(); ctx.moveTo(a.sx, a.sy); ctx.lineTo(b.sx, b.sy); ctx.stroke();
+    var a2 = project(ob.x + ob.w * 0.75, topY, zN), b2 = project(ob.x + ob.w * 0.75, baseY, zN);
+    ctx.beginPath(); ctx.moveTo(a2.sx, a2.sy); ctx.lineTo(b2.sx, b2.sy); ctx.stroke();
+    // красный верхний край (видно, что можно перепрыгнуть)
+    ctx.strokeStyle = "rgba(255,90,70,.9)"; ctx.lineWidth = 2.5;
+    var c1 = project(ob.x, topY, zN), c2 = project(ob.x + ob.w, topY, zN);
+    ctx.beginPath(); ctx.moveTo(c1.sx, c1.sy); ctx.lineTo(c2.sx, c2.sy); ctx.stroke();
   }
 
   function drawCrystal(c) {
