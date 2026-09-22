@@ -120,8 +120,28 @@
     box-shadow: 0 4px 12px rgba(0,0,0,.4); user-select: none; }
   .mbtn.press { background: rgba(255,110,180,.6); transform: scale(.94); }
   #btnSprint { right: 24px; bottom: 118px; width: 70px; height: 70px; font-size: 28px; }
+  #btnRide { right: 108px; bottom: 40px; width: 70px; height: 70px; font-size: 28px; }
   #lookZone { position: absolute; right: 0; top: 0; width: 55%; height: 100%;
     pointer-events: auto; touch-action: none; }
+  /* Подсказка «покататься» */
+  #ridePrompt {
+    position: absolute; left: 50%; bottom: 100px; transform: translateX(-50%);
+    z-index: 9; padding: 10px 22px; border-radius: 999px; white-space: nowrap;
+    background: rgba(20,14,40,.85); border: 2px solid rgba(255,215,110,.6);
+    font-size: 15px; font-weight: 800; color: #ffd76e; pointer-events: none;
+    opacity: 0; transition: opacity .2s; box-shadow: 0 6px 20px rgba(0,0,0,.5);
+  }
+  #ridePrompt.on { opacity: 1; animation: rpPulse .8s infinite alternate; }
+  @keyframes rpPulse { from { transform: translateX(-50%) scale(1); } to { transform: translateX(-50%) scale(1.05); } }
+  /* Сообщение о катании */
+  #rideMsg {
+    position: absolute; left: 50%; top: 30%; transform: translateX(-50%);
+    z-index: 10; padding: 12px 26px; border-radius: 16px; white-space: nowrap;
+    background: rgba(255,120,200,.9); color: #fff; font-size: 17px; font-weight: 800;
+    pointer-events: none; opacity: 0; box-shadow: 0 8px 24px rgba(0,0,0,.5);
+  }
+  #rideMsg.on { opacity: 1; animation: rmIn .3s; }
+  @keyframes rmIn { from { transform: translateX(-50%) scale(.7); } to { transform: translateX(-50%) scale(1); } }
 </style>
 </head>
 <body>
@@ -139,6 +159,8 @@
       <div id="danger"></div>
       <div id="dmg"></div>
       <div id="compass">➡️</div>
+      <div id="ridePrompt">🎢 ПРОБЕЛ — покататься</div>
+      <div id="rideMsg"></div>
       <canvas id="minimap"></canvas>
       <div id="chaseWrap">
         <div id="chaseBar"><span id="chaseFill"></span></div>
@@ -148,6 +170,7 @@
       <div id="mobile">
         <div id="joy"><div id="joyKnob"></div></div>
         <div class="mbtn" id="btnSprint">🏃</div>
+        <div class="mbtn" id="btnRide">🎢</div>
         <div id="lookZone"></div>
       </div>
       <div id="overlay"></div>
@@ -194,6 +217,8 @@
   var mobileEl  = document.getElementById("mobile");
   var minimap   = document.getElementById("minimap");
   var mm = minimap.getContext("2d");
+  var ridePromptEl = document.getElementById("ridePrompt");
+  var rideMsgEl = document.getElementById("rideMsg");
 
   var W = 1, H = 1, DPR = 1, FOCAL = 700;
 
@@ -223,6 +248,8 @@
   var lastTs = 0, rafId = null, camYaw = 0;
   var mousePitch = 0;      // наклон камеры мышью (от первого лица)
   var keys = {};
+  var riding = null, rideT = 0, nearRide = null;   // катание на аттракционах
+  var rides = [];          // список доступных аттракционов
 
   function loadBest() {
     try { return parseInt(localStorage.getItem("dreamisland_best") || "0", 10) || 0; }
@@ -299,32 +326,41 @@
     addBox(gate.w/2 + 1.5, PARK, 4, 5, 12, "#8a5a2a");
     addBox(0, PARK, gate.w + 8, 3, 2, "#ffd76e", 12);
 
-    // ================= АТТРАКЦИОНЫ =================
+    // ================= АТТРАКЦИОНЫ (можно кататься!) =================
+    rides = [];
 
     // --- 1. ЗАМОК (центр, как визитная карточка) ---
     bills.push({ type: "castle", x: 0, z: -95, s: 1.0 });
-    // коллизия: тело замка
     solids.push({ x: 0, z: -95, w: 60, d: 40 });
 
     // --- 2. ОГРОМНОЕ КОЛЕСО ОБОЗРЕНИЯ ---
     bills.push({ type: "ferris", x: -135, z: -40, r: 40, spin: 0 });
     bills.push({ type: "ferris", x: 140, z: 30, r: 30, spin: 1.5 });
+    rides.push({ kind: "ferris", name: "Колесо обозрения", x: -135, z: -40, r: 40, price: 0, dur: 9 });
+    rides.push({ kind: "ferris", name: "Колесо обозрения", x: 140, z: 30, r: 30, price: 0, dur: 9 });
 
-    // --- 3. АМЕРИКАНСКИЕ ГОРКИ (длинные) ---
+    // --- 3. АМЕРИКАНСКИЕ ГОРКИ ---
     bills.push({ type: "coaster", x: -90, z: 120, w: 160, h: 34 });
     bills.push({ type: "coaster", x: 110, z: -130, w: 140, h: 30 });
+    rides.push({ kind: "coaster", name: "Американские горки", x: -90, z: 120, w: 160, h: 34, price: 0, dur: 8 });
+    rides.push({ kind: "coaster", name: "Американские горки", x: 110, z: -130, w: 140, h: 30, price: 0, dur: 8 });
 
     // --- 4. КАРУСЕЛИ ---
     bills.push({ type: "carousel", x: 95, z: 100, r: 24, spin: 0 });
     bills.push({ type: "carousel", x: -120, z: 60, r: 20, spin: 2 });
     bills.push({ type: "teacups", x: 60, z: 30, r: 18, spin: 0 });
+    rides.push({ kind: "carousel", name: "Карусель", x: 95, z: 100, r: 24, price: 0, dur: 7 });
+    rides.push({ kind: "carousel", name: "Карусель", x: -120, z: 60, r: 20, price: 0, dur: 7 });
+    rides.push({ kind: "teacups", name: "Чайные чашки", x: 60, z: 30, r: 18, price: 0, dur: 6 });
 
     // --- 5. БАШНЯ СВОБОДНОГО ПАДЕНИЯ ---
     bills.push({ type: "drop", x: -60, z: 20, h: 70 });
     solids.push({ x: -60, z: 20, w: 16, d: 16 });
+    rides.push({ kind: "drop", name: "Башня падения", x: -60, z: 20, h: 70, price: 0, dur: 7 });
 
     // --- 6. ВОДНЫЕ ГОРКИ ---
     bills.push({ type: "water", x: 150, z: -60, w: 70, h: 36 });
+    rides.push({ kind: "water", name: "Водные горки", x: 150, z: -60, w: 70, h: 36, price: 0, dur: 7 });
 
     // --- 7. КОЛЕСО-ЧАСЫ / АРКА ---
     bills.push({ type: "arch", x: 0, z: 60, w: 40, h: 26 });
@@ -877,6 +913,38 @@
     ctx.restore();
     ctx.globalAlpha = 1;
   }
+  /* ---------- Маркеры аттракционов ---------- */
+  function drawRideMarkers() {
+    for (var i = 0; i < rides.length; i++) {
+      var r = rides[i];
+      var d = Math.hypot(r.x - player.x, r.z - player.z);
+      if (d > 90) continue;
+      var base = proj(r.x, r.kind === "drop" ? r.h + 8 : (r.kind === "ferris" ? r.r * 2 + 6 : 16), r.z);
+      if (!base) continue;
+      var bob = Math.sin(timeNow * 3 + i) * 0.1;
+      var p = proj(r.x, (r.kind === "drop" ? r.h + 8 : (r.kind === "ferris" ? r.r * 2 + 6 : 16)) + bob, r.z);
+      if (!p) continue;
+      ctx.save();
+      ctx.globalAlpha = fade(p.z) * 0.95;
+      // пузырь с иконкой
+      var sz = clamp(p.s * 2.2, 14, 40);
+      ctx.fillStyle = "rgba(20,14,40,.8)";
+      ctx.beginPath(); ctx.arc(p.x, p.y, sz, 0, Math.PI * 2); ctx.fill();
+      ctx.strokeStyle = "rgba(255,215,110,.8)"; ctx.lineWidth = 2; ctx.stroke();
+      ctx.fillStyle = "#ffd76e";
+      ctx.font = Math.round(sz * 1.1) + "px sans-serif";
+      ctx.textAlign = "center"; ctx.textBaseline = "middle";
+      ctx.fillText("🎢", p.x, p.y);
+      // надпись, если это ближайший
+      if (nearRide === r) {
+        ctx.fillStyle = "#fff";
+        ctx.font = "800 " + Math.round(clamp(p.s*1.1, 11, 18)) + "px sans-serif";
+        ctx.fillText("ПРОБЕЛ", p.x, p.y - sz - 6);
+      }
+      ctx.restore();
+    }
+  }
+
   function drawGate() {
     var p = proj(gate.x, 0, gate.z);
     if (!p) return;
@@ -1011,6 +1079,38 @@
     if (shakeT > 0) shakeT -= dt;
     if (catchT > 0) catchT -= dt;
 
+    // ===== КАТАНИЕ НА АТТРАКЦИОНЕ =====
+    if (riding) {
+      rideT += dt;
+      updateRideCamera(dt);
+      // монстр не может схватить, пока катаешься, но приближается
+      var rmd = Math.hypot(riding.x - monster.x, riding.z - monster.z);
+      monster.x += (p.x - monster.x) * Math.min(1, dt * 0.6);
+      monster.z += (p.z - monster.z) * Math.min(1, dt * 0.6);
+      monster.anim += dt * 5;
+      if (rideT >= riding.dur) { endRide(); }
+      updateHUD();
+      // частицы/облака продолжают жить
+      for (var f = particles.length - 1; f >= 0; f--) {
+        var pt = particles[f];
+        pt.x += pt.vx*dt; pt.z += pt.vz*dt; pt.y += pt.vy*dt; pt.vy -= 30*dt; pt.life -= dt;
+        if (pt.life <= 0) particles.splice(f, 1);
+      }
+      for (var c = 0; c < clouds.length; c++) clouds[c].x += dt * 1.2;
+      timeNow += 0; // уже добавлено
+      return;
+    }
+
+    // ищем ближайший аттракцион
+    nearRide = null;
+    var nrd = 12;
+    for (var ri = 0; ri < rides.length; ri++) {
+      var r = rides[ri];
+      if (r.used) continue;
+      var rd = Math.hypot(r.x - p.x, r.z - p.z);
+      if (rd < nrd) { nrd = rd; nearRide = r; }
+    }
+
     var mvF = 0, mvR = 0;
     if (keys.w) mvF += 1;
     if (keys.s) mvF -= 1;
@@ -1120,6 +1220,82 @@
     return "🎠 Центральная площадь";
   }
 
+  /* ======================= КАТАНИЕ ======================= */
+  function tryStartRide() {
+    if (!running || riding) return;
+    nearRide = null;
+    var nrd = 13;
+    for (var i = 0; i < rides.length; i++) {
+      var r = rides[i];
+      var d = Math.hypot(r.x - player.x, r.z - player.z);
+      if (d < nrd) { nrd = d; nearRide = r; }
+    }
+    if (!nearRide) return;
+    startRide(nearRide);
+  }
+
+  function startRide(r) {
+    riding = r; rideT = 0;
+    sndTicket();
+    burst(r.x, r.z, "#ffd76e", 18);
+    updateHUD();
+    rideMsg("🎢 " + r.name + " — катаемся!");
+  }
+
+  function endRide() {
+    var r = riding;
+    riding = null; rideT = 0;
+    player.x = r.x; player.z = r.z + (r.kind === "ferris" ? 14 : 16);
+    player.x = clamp(player.x, -PARK + 4, PARK - 4);
+    player.z = clamp(player.z, -PARK + 4, PARK - 4);
+    rideMsg("Понравилось кататься! 🎠");
+  }
+
+  function updateRideCamera(dt) {
+    var r = riding;
+    var t = rideT / r.dur;
+    var ease = Math.min(1, rideT * 1.5) * Math.min(1, (r.dur - rideT) * 1.5);
+    if (r.kind === "ferris" || r.kind === "carousel" || r.kind === "teacups") {
+      // кружимся по кругу
+      var ang = rideT * (r.kind === "teacups" ? 1.6 : 0.9);
+      var rr = (r.r || 20) * 0.7;
+      player.x = r.x + Math.cos(ang) * rr;
+      player.z = r.z + Math.sin(ang) * rr;
+      player.y = (r.kind === "ferris") ? (r.r) * (0.5 + 0.5 * Math.sin(t * Math.PI)) : 0;
+      cam.yaw = ang + Math.PI;
+      cam.pitch = r.kind === "ferris" ? -0.15 - ease * 0.2 : 0.2;
+    } else if (r.kind === "drop") {
+      // взлёт и падение
+      var ph = rideT / r.dur;
+      var hgt;
+      if (ph < 0.5) hgt = (ph / 0.5) * r.h * 0.9;          // подъём
+      else hgt = r.h * 0.9 * Math.max(0, 1 - (ph - 0.5) / 0.35); // резкое падение
+      player.y = hgt;
+      player.x = r.x; player.z = r.z + 6;
+      cam.pitch = ph < 0.5 ? -0.35 : 0.45;
+      if (ph > 0.5 && Math.random() < 0.5) burst(r.x, r.z + 6, "#8fe0ff", 2);
+    } else if (r.kind === "coaster") {
+      // едем вдоль горок
+      var cx = r.x - r.w/2 + t * r.w;
+      var cy = 10 + Math.sin(t * Math.PI) * r.h;
+      player.x = cx; player.z = r.z; player.y = cy;
+      cam.yaw = Math.PI / 2;  // смотрим вдоль пути
+      cam.pitch = Math.cos(t * Math.PI) * 0.4;
+      if (Math.random() < 0.4) burst(cx, r.z, "#ff7ad0", 1);
+    } else if (r.kind === "water") {
+      // спуск по воде
+      var wx = r.x - r.w/2 + t * r.w;
+      player.x = wx; player.z = r.z; player.y = r.h * (1 - t);
+      cam.yaw = Math.PI / 2;
+      cam.pitch = 0.2;
+      if (Math.random() < 0.5) burst(wx, r.z + 12, "#7fd4ff", 2);
+    }
+    cam.x = player.x; cam.z = player.z; cam.y = player.y + CAM_HEIGHT;
+  }
+
+  var rideMsgT = 0, rideMsgTxt = "";
+  function rideMsg(t) { rideMsgT = 2.5; rideMsgTxt = t; }
+
   var joyActive = false, joyId = null, joyCX = 0, joyCY = 0, joyDX = 0, joyDY = 0;
   function burst(x, z, color, n) {
     for (var i = 0; i < n; i++) {
@@ -1208,6 +1384,7 @@
     ctx.globalAlpha = 1;
     ctx.restore();
 
+    drawRideMarkers();
     drawFirstPersonHands();
     drawCompass();
     drawMinimap();
@@ -1311,6 +1488,7 @@
     if (k === "a" || k === "arrowleft" || k === "ф") keys.a = true;
     if (k === "d" || k === "arrowright" || k === "в") keys.d = true;
     if (k === "shift") keys.shift = true;
+    if (k === " " && running) { e.preventDefault(); if (riding) endRide(); else tryStartRide(); }
     if (!running && (e.key === " " || e.key === "Enter")) { e.preventDefault(); startGame(); }
   });
   window.addEventListener("keyup", function (e) {
@@ -1387,6 +1565,7 @@
     el.addEventListener("mouseup", function (e) { if (isMobile) return; e.preventDefault(); if (up) up(); });
   }
   bindBtn("btnSprint", function () { runHold = true; }, function () { runHold = false; });
+  bindBtn("btnRide", function () { if (riding) endRide(); else tryStartRide(); });
 
   /* ======================= ЭКРАНЫ ======================= */
   function showStart() {
@@ -1394,8 +1573,9 @@
     var keysHtml = isMobile
       ? '<div class="keys">' +
           '<div><span class="key">🕹️</span> джойстик — идти</div>' +
-          '<div><span class="key">👆</span> свайп справа — повернуть камеру</div>' +
+          '<div><span class="key">👆</span> свайп справа — смотреть вокруг</div>' +
           '<div><span class="key">🏃</span> кнопка — бежать</div>' +
+          '<div><span class="key">🎢</span> кнопка — покататься на аттракционе</div>' +
         '</div>'
       : '<div class="keys">' +
           '<div><span class="key">W A S D</span> — идти (куда смотришь)</div>' +
@@ -1408,6 +1588,7 @@
         '<p><b>Огромный крытый парк развлечений</b> — под гигантским куполом!<br>' +
         'Замок, колесо обозрения, горки, карусели… Но за тобой гонится <b>монстр</b>!</p>' +
         '<p>Собери <b>' + TICKETS_TOTAL + ' билетов</b> 🎫 — и ворота откроются. Всё <b>от первого лица</b>!</p>' +
+        '<p style="color:#ffd76e">🎢 Подойди к аттракциону и нажми <b>ПРОБЕЛ</b> — покатаешься!</p>' +
         '<p style="font-size:13px;opacity:.85">❤️ 3 жизни · 🏃 бег тратит силы · 🗺️ мини-карта справа · 🔦 фонарик в руке</p>' +
         keysHtml +
         '<div class="legend">' +
@@ -1475,6 +1656,22 @@
       for (var i = 0; i < steps && running; i++) update(h);
       timeEl.textContent = fmtTime(timeNow);
       stamFill.style.width = stamina + "%";
+    }
+    // подсказка и сообщение катания
+    if (rideMsgT > 0) {
+      rideMsgT -= dt;
+      rideMsgEl.textContent = rideMsgTxt;
+      rideMsgEl.classList.add("on");
+      if (rideMsgT <= 0) rideMsgEl.classList.remove("on");
+    }
+    if (running && !riding && nearRide) {
+      ridePromptEl.innerHTML = "🎢 " + (nearRide.price > 0 ? "ПРОБЕЛ — покататься (" + nearRide.price + " 🎫)" : "ПРОБЕЛ — покататься");
+      ridePromptEl.classList.add("on");
+    } else if (running && riding) {
+      ridePromptEl.innerHTML = "⏹️ ПРОБЕЛ — слезть";
+      ridePromptEl.classList.add("on");
+    } else {
+      ridePromptEl.classList.remove("on");
     }
     render();
     rafId = requestAnimationFrame(frame);
