@@ -165,9 +165,10 @@
   var STAM_MAX    = 100;
   var STAM_USE    = 20;
   var STAM_REGEN  = 15;
-  var CAM_DIST    = 30;
-  var CAM_HEIGHT  = 15;
-  var CAM_TARGET  = 7;
+  var CAM_DIST    = 0;       // от первого лица — камера в глазах
+  var CAM_HEIGHT  = 3.2;     // высота глаз
+  var CAM_TARGET  = 3.2;
+  var ROOF_H      = 95;      // высота крыши (крытый парк!)
   var MON_BASE    = 13;
   var MON_RAMP    = 0.12;
   var MON_MAX     = 22;
@@ -220,6 +221,7 @@
   var stamina = STAM_MAX, runHold = false;
   var invuln = 0, catchT = 0, growlT = 1, shakeT = 0, shakeMag = 0;
   var lastTs = 0, rafId = null, camYaw = 0;
+  var mousePitch = 0;      // наклон камеры мышью (от первого лица)
   var keys = {};
 
   function loadBest() {
@@ -369,6 +371,16 @@
     // корректируем число билетов
     tickets = tickets.slice(0, TICKETS_TOTAL);
 
+    // ================= КОЛОННЫ КРЫШИ =================
+    var pillars = [];
+    for (var px = -PARK + 30; px <= PARK - 30; px += 60) {
+      for (var pz = -PARK + 30; pz <= PARK - 30; pz += 60) {
+        if (nearAny(px, pz, 8)) continue;
+        if (Math.abs(px) < 20 && Math.abs(pz) < 20) continue;
+        addBox(px, pz, 8, 8, ROOF_H, "#3a3050");
+      }
+    }
+
     // облака
     for (var c = 0; c < 40; c++) clouds.push({ x: rand(-PARK*2, PARK*2), z: rand(-PARK*2, PARK*2), y: rand(80, 150), s: rand(22, 42) });
   }
@@ -412,39 +424,69 @@
   /* ======================= ОТРИСОВКА ======================= */
   function drawSky() {
     var hy = horizonY();
-    var g = ctx.createLinearGradient(0, 0, 0, Math.max(hy, H*0.6));
-    g.addColorStop(0, "#1b2a8b");
-    g.addColorStop(0.5, "#5a7fe0");
-    g.addColorStop(0.85, "#a8cdf5");
-    g.addColorStop(1, "#ffe6c0");
+    // ===== Крыша-купол закрытого парка =====
+    var g = ctx.createLinearGradient(0, 0, 0, Math.max(hy + 40, H*0.6));
+    g.addColorStop(0, "#1a1430");
+    g.addColorStop(0.4, "#3a2a58");
+    g.addColorStop(0.75, "#6a4a78");
+    g.addColorStop(1, "#b88aa0");
     ctx.fillStyle = g;
-    ctx.fillRect(0, 0, W, Math.max(hy, 0));
+    ctx.fillRect(0, 0, W, Math.max(hy + 60, 0));
 
-    var sx = W/2 - Math.sin(cam.yaw) * W * 0.7, sy = hy - H*0.3;
-    var sun = ctx.createRadialGradient(sx, sy, 4, sx, sy, 150);
-    sun.addColorStop(0, "rgba(255,250,210,.95)");
-    sun.addColorStop(0.35, "rgba(255,235,160,.4)");
-    sun.addColorStop(1, "rgba(255,230,160,0)");
-    ctx.fillStyle = sun;
-    ctx.beginPath(); ctx.arc(sx, sy, 150, 0, Math.PI*2); ctx.fill();
-    ctx.fillStyle = "#fff6cc";
-    ctx.beginPath(); ctx.arc(sx, sy, 46, 0, Math.PI*2); ctx.fill();
-
-    // облака в небе
-    for (var i = 0; i < clouds.length; i++) {
-      var c = clouds[i];
-      var p = proj(c.x, c.y, c.z);
-      if (!p) continue;
-      ctx.globalAlpha = clamp(fade(p.z), 0.1, 0.85);
-      ctx.fillStyle = "#ffffff";
-      var s = c.s * p.s;
+    // рёбра купола (радиальные балки), уходящие от центра
+    var cx = W/2 - Math.sin(cam.yaw) * W * 0.3;
+    var cy = hy - H * 0.5;
+    var ribs = 26;
+    for (var i = 0; i < ribs; i++) {
+      var a = (i / ribs) * Math.PI * 2 + cam.yaw;
+      var ex = W/2 + Math.sin(a) * W * 1.6;
+      var ey = hy + 30 - Math.abs(Math.cos(a)) * H * 0.06;
+      ctx.strokeStyle = "rgba(140,160,220,.10)";
+      ctx.lineWidth = 3;
       ctx.beginPath();
-      ctx.ellipse(p.x, p.y, s, s*0.5, 0, 0, Math.PI*2);
-      ctx.ellipse(p.x + s*0.6, p.y + s*0.1, s*0.7, s*0.4, 0, 0, Math.PI*2);
-      ctx.ellipse(p.x - s*0.6, p.y + s*0.1, s*0.65, s*0.35, 0, 0, Math.PI*2);
-      ctx.fill();
+      ctx.moveTo(cx, cy);
+      ctx.lineTo(ex, ey);
+      ctx.stroke();
     }
-    ctx.globalAlpha = 1;
+    // кольца купола
+    for (var r = 1; r <= 5; r++) {
+      var rr = r / 5;
+      ctx.strokeStyle = "rgba(150,170,230,.08)";
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.ellipse(cx, cy, W * rr * 0.9, H * rr * 0.5, 0, 0, Math.PI * 2);
+      ctx.stroke();
+    }
+
+    // потолочные фонари (светящиеся полосы)
+    for (var s = -4; s <= 4; s++) {
+      var lx = W/2 + s * W * 0.11 - Math.sin(cam.yaw) * W * 0.25;
+      var ly = H * 0.06 + Math.abs(s) * H * 0.012;
+      var flick = 0.7 + 0.3 * Math.sin(timeNow * 2 + s);
+      ctx.save();
+      ctx.shadowColor = "rgba(255,240,190," + flick + ")";
+      ctx.shadowBlur = 60;
+      ctx.fillStyle = "rgba(255,244,210,.85)";
+      ctx.beginPath(); ctx.ellipse(lx, ly, W*0.05, H*0.012, 0, 0, Math.PI*2); ctx.fill();
+      ctx.restore();
+    }
+
+    // витражи-окна по стенам (сбоку, подсвечены)
+    for (var wI = -6; wI <= 6; wI++) {
+      var wx = W/2 + wI * W * 0.13 - Math.sin(cam.yaw) * W * 0.5;
+      var wy = hy - H * 0.22;
+      var warm = (wI % 3 === 0);
+      var pulse = 0.5 + 0.5 * Math.sin(timeNow * 1.2 + wI);
+      ctx.globalAlpha = 0.28 + pulse * 0.2;
+      ctx.fillStyle = warm ? "#ffd9a0" : "#a8d0ff";
+      ctx.beginPath();
+      ctx.moveTo(wx - W*0.045, hy + 10);
+      ctx.lineTo(wx - W*0.03, wy);
+      ctx.lineTo(wx + W*0.03, wy);
+      ctx.lineTo(wx + W*0.045, hy + 10);
+      ctx.closePath(); ctx.fill();
+      ctx.globalAlpha = 1;
+    }
   }
 
   function drawGround() {
@@ -1048,13 +1090,12 @@
 
     if (gate.open && Math.abs(p.x - gate.x) < gate.w/2 && p.z > gate.z - 6) { endGame(true); return; }
 
-    // камера
+    // камера — ОТ ПЕРВОГО ЛИЦА (из глаз игрока)
     camYaw = cam.yaw;
-    var fx2 = Math.sin(cam.yaw), fz2 = Math.cos(cam.yaw);
-    cam.x = p.x - fx2 * CAM_DIST;
-    cam.z = p.z - fz2 * CAM_DIST;
+    cam.x = p.x;
+    cam.z = p.z;
     cam.y = CAM_HEIGHT;
-    cam.pitch = Math.atan2(CAM_HEIGHT - CAM_TARGET, CAM_DIST);
+    cam.pitch = 0.06 + (isMobile ? 0 : mousePitch);   // чуть вниз, можно смотреть мышью
 
     // зона
     zoneEl.textContent = zoneName(p.x, p.z);
@@ -1149,8 +1190,7 @@
       else if (type === "ticket") drawTicket(it.o);
       else if (type === "gate") drawGate();
       else if (type === "player") {
-        var pp = proj(player.x, 0, player.z);
-        if (pp) drawBlockGuy(pp, { bodyCol: "#4aa8e8", headCol: "#ffd76e", face: (Math.sin(player.facing) < -0.05 ? -1 : 1), walk: player.walk });
+        // От первого лица — себя не рисуем
       } else if (type === "monster") {
         var mp = proj(monster.x, 0, monster.z);
         if (mp) drawMonsterBill(mp, monster);
@@ -1168,8 +1208,36 @@
     ctx.globalAlpha = 1;
     ctx.restore();
 
+    drawFirstPersonHands();
     drawCompass();
     drawMinimap();
+  }
+
+  // Руки игрока от первого лица (+ мигающий фонарик)
+  function drawFirstPersonHands() {
+    if (!running) return;
+    var W2 = W, H2 = H;
+    var sway = Math.sin(player.walk) * 6;
+    ctx.save();
+    // левая рука
+    ctx.fillStyle = "#e8b894";
+    ctx.fillRect(W2*0.16 + sway, H2 - 70 + Math.abs(sway)*0.3, 44, 110);
+    ctx.fillStyle = "#3a5a9a";
+    ctx.fillRect(W2*0.16 + sway, H2 - 70 + Math.abs(sway)*0.3, 44, 26);
+    // правая рука + фонарик
+    ctx.fillStyle = "#e8b894";
+    ctx.fillRect(W2*0.80 - sway, H2 - 80 - Math.abs(sway)*0.3, 44, 120);
+    ctx.fillStyle = "#3a5a9a";
+    ctx.fillRect(W2*0.80 - sway, H2 - 80 - Math.abs(sway)*0.3, 44, 26);
+    // фонарик
+    var flick = 0.75 + 0.25 * Math.sin(timeNow * 12);
+    ctx.save();
+    ctx.shadowColor = "rgba(255,240,180," + flick + ")";
+    ctx.shadowBlur = 30;
+    ctx.fillStyle = "rgba(255,248,220,.95)";
+    ctx.beginPath(); ctx.arc(W2*0.80 - sway + 22, H2 - 84, 9, 0, Math.PI*2); ctx.fill();
+    ctx.restore();
+    ctx.restore();
   }
 
   function drawCompass() {
@@ -1254,12 +1322,14 @@
     if (k === "shift") keys.shift = false;
   });
 
-  var dragging = false, lastMX = 0;
-  canvas.addEventListener("mousedown", function (e) { dragging = true; lastMX = e.clientX; });
+  var dragging = false, lastMX = 0, lastMY = 0;
+  canvas.addEventListener("mousedown", function (e) { dragging = true; lastMX = e.clientX; lastMY = e.clientY; });
   window.addEventListener("mouseup", function () { dragging = false; });
   window.addEventListener("mousemove", function (e) {
     if (!dragging || !running) return;
-    cam.yaw -= (e.clientX - lastMX) * 0.006; lastMX = e.clientX;
+    cam.yaw -= (e.clientX - lastMX) * 0.006;
+    mousePitch = clamp(mousePitch + (e.clientY - lastMY) * 0.004, -0.5, 0.7);
+    lastMX = e.clientX; lastMY = e.clientY;
   });
   canvas.addEventListener("contextmenu", function (e) { e.preventDefault(); });
 
@@ -1328,16 +1398,17 @@
           '<div><span class="key">🏃</span> кнопка — бежать</div>' +
         '</div>'
       : '<div class="keys">' +
-          '<div><span class="key">W A S D</span> — идти</div>' +
-          '<div><span class="key">Мышь</span> (зажать и вести) — поворот камеры</div>' +
+          '<div><span class="key">W A S D</span> — идти (куда смотришь)</div>' +
+          '<div><span class="key">Мышь</span> (зажать и вести) — смотреть вокруг</div>' +
           '<div><span class="key">Shift</span> — 🏃 бежать</div>' +
         '</div>';
     overlay.innerHTML =
       '<div class="card">' +
         '<h1>🏰 Остров Мечты</h1>' +
-        '<p>Огромный парк развлечений! Замок, колесо обозрения, горки, карусели…<br>' +
-        'Но за тобой гонится <b>монстр</b>! Собери <b>' + TICKETS_TOTAL + ' билетов</b> 🎫 — ворота откроются.</p>' +
-        '<p style="font-size:13px;opacity:.85">❤️ 3 жизни · 🏃 бег тратит силы · 🗺️ мини-карта справа поможет не заблудиться</p>' +
+        '<p><b>Огромный крытый парк развлечений</b> — под гигантским куполом!<br>' +
+        'Замок, колесо обозрения, горки, карусели… Но за тобой гонится <b>монстр</b>!</p>' +
+        '<p>Собери <b>' + TICKETS_TOTAL + ' билетов</b> 🎫 — и ворота откроются. Всё <b>от первого лица</b>!</p>' +
+        '<p style="font-size:13px;opacity:.85">❤️ 3 жизни · 🏃 бег тратит силы · 🗺️ мини-карта справа · 🔦 фонарик в руке</p>' +
         keysHtml +
         '<div class="legend">' +
           '<span>🏰 Замок Дракона</span>' +
