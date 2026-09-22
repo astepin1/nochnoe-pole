@@ -246,6 +246,7 @@
   var stamina = STAM_MAX, runHold = false;
   var invuln = 0, catchT = 0, growlT = 1, shakeT = 0, shakeMag = 0;
   var lastTs = 0, rafId = null, camYaw = 0;
+  var lastFrameDt = 0.016;
   var mousePitch = 0;      // наклон камеры мышью (от первого лица)
   var keys = {};
   var riding = null, rideT = 0, nearRide = null;   // катание на аттракционах
@@ -501,7 +502,7 @@
       var flick = 0.7 + 0.3 * Math.sin(timeNow * 2 + s);
       ctx.save();
       ctx.shadowColor = "rgba(255,240,190," + flick + ")";
-      ctx.shadowBlur = 60;
+      ctx.shadowBlur = 12;
       ctx.fillStyle = "rgba(255,244,210,.85)";
       ctx.beginPath(); ctx.ellipse(lx, ly, W*0.05, H*0.012, 0, 0, Math.PI*2); ctx.fill();
       ctx.restore();
@@ -773,7 +774,7 @@
     ctx.beginPath(); ctx.moveTo(p.x, p.y); ctx.lineTo(p.x, p.y - hh); ctx.stroke();
     var glow = 0.6 + 0.4*Math.sin(timeNow*3 + o.x);
     ctx.save();
-    ctx.shadowColor = "rgba(255,235,150," + glow + ")"; ctx.shadowBlur = 22;
+    ctx.shadowColor = "rgba(255,235,150," + glow + ")"; ctx.shadowBlur = 12;
     ctx.fillStyle = "#ffe9b0";
     ctx.beginPath(); ctx.arc(p.x, p.y - hh, 0.09*hh, 0, Math.PI*2); ctx.fill();
     ctx.restore();
@@ -1052,7 +1053,7 @@
     ctx.closePath(); ctx.fill();
     var eg = 0.7 + 0.3*Math.sin(timeNow*9);
     ctx.save();
-    ctx.shadowColor = "rgba(255,30,30," + eg + ")"; ctx.shadowBlur = 20;
+    ctx.shadowColor = "rgba(255,30,30," + eg + ")"; ctx.shadowBlur = 12;
     ctx.fillStyle = "#ff2a2a";
     ctx.fillRect(-headS*0.3, hy + headS*0.28, headS*0.2, headS*0.16);
     ctx.fillRect(headS*0.1, hy + headS*0.28, headS*0.2, headS*0.16);
@@ -1387,7 +1388,7 @@
     drawRideMarkers();
     drawFirstPersonHands();
     drawCompass();
-    drawMinimap();
+    drawMinimap(lastFrameDt);
   }
 
   // Руки игрока от первого лица (+ мигающий фонарик)
@@ -1410,7 +1411,7 @@
     var flick = 0.75 + 0.25 * Math.sin(timeNow * 12);
     ctx.save();
     ctx.shadowColor = "rgba(255,240,180," + flick + ")";
-    ctx.shadowBlur = 30;
+    ctx.shadowBlur = 14;
     ctx.fillStyle = "rgba(255,248,220,.95)";
     ctx.beginPath(); ctx.arc(W2*0.80 - sway + 22, H2 - 84, 9, 0, Math.PI*2); ctx.fill();
     ctx.restore();
@@ -1440,7 +1441,12 @@
     compassEl.style.transform = "rotate(" + (ang * 180 / Math.PI) + "deg)";
   }
 
-  function drawMinimap() {
+  var mmTimer = 0;
+  function drawMinimap(dt) {
+    // обновляем реже — раз в 0.1 сек (для скорости)
+    mmTimer -= (dt || 0.016);
+    if (mmTimer > 0) return;
+    mmTimer = 0.1;
     var M = minimap.width / DPR;
     mm.setTransform(DPR, 0, 0, DPR, 0, 0);
     mm.clearRect(0, 0, M, M);
@@ -1651,6 +1657,7 @@
   function frame(ts) {
     var dt = lastTs ? Math.min((ts - lastTs)/1000, 0.033) : 0.016;
     lastTs = ts;
+    lastFrameDt = dt;
     if (running) {
       var steps = 2, h = dt/steps;
       for (var i = 0; i < steps && running; i++) update(h);
