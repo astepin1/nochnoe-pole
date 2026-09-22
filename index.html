@@ -3,120 +3,73 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Мои игры 🎮</title>
+<title>Моя игра 👹</title>
 <style>
   * { box-sizing: border-box; }
   html, body { margin: 0; min-height: 100%; }
   body {
     font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-    background: radial-gradient(circle at 50% 0%, #2a2050, #14102a 55%, #0a0818 100%);
-    color: #eef0ff; padding: 32px 18px 60px;
+    background: radial-gradient(circle at 50% 0%, #2a1030, #14061a 55%, #0a0410 100%);
+    color: #eef0ff; padding: 40px 18px 60px;
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+    min-height: 100vh;
   }
   h1 {
-    text-align: center; margin: 0 0 6px; font-size: 38px; letter-spacing: .02em;
-    background: linear-gradient(90deg,#ffd28a,#ff8fc0,#8fe0ff,#8dffb4);
+    text-align: center; margin: 0 0 6px; font-size: 40px; letter-spacing: .02em;
+    background: linear-gradient(90deg,#ff6b6b,#ffd76e,#8fe0ff);
     -webkit-background-clip: text; background-clip: text; -webkit-text-fill-color: transparent;
   }
   .sub { text-align: center; opacity: .6; margin: 0 0 30px; font-size: 15px; }
-  .grid {
-    max-width: 1000px; margin: 0 auto;
-    display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 16px;
-  }
   .card {
     display: block; text-decoration: none; color: inherit;
-    background: linear-gradient(160deg, rgba(255,255,255,.09), rgba(255,255,255,.03));
-    border: 1px solid rgba(255,255,255,.14); border-radius: 18px;
-    padding: 18px 18px 16px; transition: transform .14s, box-shadow .18s, border-color .18s;
-    position: relative; overflow: hidden;
+    width: min(100%, 520px);
+    background: linear-gradient(160deg, rgba(255,255,255,.1), rgba(255,255,255,.03));
+    border: 2px solid rgba(255,90,90,.4); border-radius: 24px;
+    padding: 26px 26px 22px; transition: transform .14s, box-shadow .18s, border-color .18s;
+    position: relative; overflow: hidden; text-align: center;
   }
   .card:hover {
-    transform: translateY(-4px); border-color: rgba(255,180,220,.5);
-    box-shadow: 0 16px 40px rgba(120,60,180,.35);
+    transform: translateY(-4px); border-color: rgba(255,150,120,.8);
+    box-shadow: 0 20px 50px rgba(200,50,50,.4);
   }
-  .emoji { font-size: 34px; line-height: 1; }
-  .name { font-size: 18px; font-weight: 800; margin: 10px 0 4px; }
-  .desc { font-size: 13px; opacity: .72; line-height: 1.45; min-height: 38px; }
+  .emoji { font-size: 64px; line-height: 1; }
+  .name { font-size: 26px; font-weight: 800; margin: 14px 0 6px; }
+  .desc { font-size: 14px; opacity: .75; line-height: 1.5; }
+  .play {
+    display: inline-block; margin-top: 18px; padding: 14px 40px; font-size: 18px; font-weight: 800;
+    color: #2a0808; background: linear-gradient(180deg,#ff9a8a,#ff5a4a);
+    border-radius: 14px; box-shadow: 0 7px 0 #c23a2a, 0 12px 24px rgba(0,0,0,.25);
+  }
+  .tags { display: flex; gap: 8px; justify-content: center; flex-wrap: wrap; margin-top: 16px; }
   .tag {
-    display: inline-block; margin-top: 10px; font-size: 11px; font-weight: 700;
-    padding: 4px 10px; border-radius: 999px;
-    background: rgba(160,120,255,.22); border: 1px solid rgba(180,150,255,.35);
+    font-size: 12px; font-weight: 700; padding: 5px 12px; border-radius: 999px;
+    background: rgba(255,140,120,.18); border: 1px solid rgba(255,150,130,.35);
   }
-  .tag.new { background: rgba(120,255,190,.2); border-color: rgba(140,255,200,.45); color: #9dffcc; }
   .url {
-    display: block; margin-top: 10px; font-size: 11px; opacity: .45;
+    display: block; margin-top: 14px; font-size: 11px; opacity: .4;
     font-family: ui-monospace, Menlo, monospace; word-break: break-all;
   }
-  footer { text-align: center; opacity: .45; font-size: 12px; margin-top: 40px; }
-
-  /* список ссылок текстом */
-  .list { max-width: 1000px; margin: 46px auto 0; }
-  .list h2 { font-size: 18px; opacity: .85; border-bottom: 1px solid rgba(255,255,255,.12); padding-bottom: 8px; }
-  .list ol { padding-left: 22px; line-height: 2; font-size: 14px; }
-  .list a { color: #9fd0ff; text-decoration: none; }
-  .list a:hover { text-decoration: underline; }
-  .list .nm { color: #fff; font-weight: 700; margin-right: 6px; }
 </style>
 </head>
 <body>
-  <h1>🎮 Мои игры</h1>
-  <p class="sub">Выбери игру и играй — просто нажми на карточку</p>
+  <h1>👹 Моя игра</h1>
+  <p class="sub">Нажми, чтобы играть</p>
 
-  <div class="grid" id="grid"></div>
-
-  <div class="list">
-    <h2>Список ссылок (для копирования)</h2>
-    <ol id="linkList"></ol>
-  </div>
-
-  <footer>Все игры работают в браузере — на компьютере и телефоне 📱</footer>
-
-<script>
-  var GAMES = [
-    { file: "tapay-homyaka.html", emoji: "🐹👆", name: "Тапай хомяка",
-      desc: "Тапай по хомяку за 30 секунд! Комбо, криты и золотой хомяк ×10. 8 достижений.", tag: "Тапалка", isNew: true },
-    { file: "pauk-kurier.html", emoji: "🕷️📦", name: "Паук-курьер",
-      desc: "Летай на паутине между небоскрёбами, как Человек-паук: забери посылку и доставь в дом.", tag: "Полёты", isNew: true },
-    { file: "kotiki-parizha.html", emoji: "🗼🐱", name: "Котики у Эйфелевой башни",
-      desc: "3D-прогулка: корми рыбкой котиков, они бегают и разговаривают. Можно бегать (Shift).", tag: "3D", isNew: true },
-    { file: "parkur-3d.html", emoji: "👹🌃", name: "Паркур 3D: убеги от монстра",
-      desc: "3D-город в перспективе! Беги по крышам, прыгай в пропасти, монстр догоняет. Уровни всё сложнее.", tag: "3D", isNew: true },
-    { file: "parkur.html", emoji: "👹🏃", name: "Паркур: убеги от монстра",
-      desc: "Беги по крышам, прыгай через пропасти. За тобой гонится страшный монстр!", tag: "Экшн", isNew: true },
-    { file: "poglad-kotika.html", emoji: "🐱🧴", name: "Погладь и вычеши котика",
-      desc: "Гладь котика рукой или вычёсывай щёткой. Не трогай животик и хвост!", tag: "Милые", isNew: true },
-    { file: "homyaki.html", emoji: "🐹🌾", name: "Хомяки на поле",
-      desc: "Тир на ровном поле: кликай по хомякам, которые выглядывают из норок.", tag: "Тир", isNew: true },
-    { file: "oborona-zemli.html", emoji: "🌍🔫", name: "Оборона Земли (FPS)",
-      desc: "Реалистичный шутер от первого лица: отстреливай пришельцев бластером.", tag: "Шутер" },
-    { file: "prishelcy-3d.html", emoji: "🌌👾", name: "3D Вторжение",
-      desc: "Пришельцы летят прямо на тебя из глубины космоса. Целься мышкой и стреляй.", tag: "3D" },
-    { file: "vtorzhenie.html", emoji: "👽🛸", name: "Вторжение",
-      desc: "2D оборона: пришельцы спускаются к Земле, щит, волны, боссы.", tag: "Аркада" },
-    { file: "tir-pro.html", emoji: "🎯✨", name: "Тир PRO",
-      desc: "Мишени с бонусами: золотые, бомбы, заморозка. Очки, комбо, рекорды.", tag: "Тир" },
-    { file: "tir.html", emoji: "🎯", name: "Тир",
-      desc: "Простой тир: кликай по мишеням. Чем меньше мишень — тем больше очков.", tag: "Тир" }
-  ];
-
-  var grid = document.getElementById("grid");
-  var list = document.getElementById("linkList");
-
-  GAMES.forEach(function (g) {
-    var a = document.createElement("a");
-    a.className = "card";
-    a.href = g.file;
-    a.innerHTML =
-      '<div class="emoji">' + g.emoji + '</div>' +
-      '<div class="name">' + g.name + '</div>' +
-      '<div class="desc">' + g.desc + '</div>' +
-      '<span class="tag' + (g.isNew ? ' new' : '') + '">' + (g.isNew ? 'новинка' : g.tag) + '</span>' +
-      '<span class="url">' + g.file + '</span>';
-    grid.appendChild(a);
-
-    var li = document.createElement("li");
-    li.innerHTML = '<span class="nm">' + g.name + '</span> — <a href="' + g.file + '">' + g.file + '</a>';
-    list.appendChild(li);
-  });
-</script>
+  <a class="card" href="parkur-3d.html">
+    <div class="emoji">👹🌃</div>
+    <div class="name">Паркур 3D: убеги от монстра</div>
+    <div class="desc">
+      3D-город в перспективе. Беги по крышам, прыгай через пропасти и барьеры —
+      за тобой гонится монстр! Собирай кристаллы, открывай новые уровни.
+    </div>
+    <div class="tags">
+      <span class="tag">🌃 3D</span>
+      <span class="tag">👹 8 монстров + босс</span>
+      <span class="tag">⬆️ уровни</span>
+      <span class="tag">📱 телефон и ПК</span>
+    </div>
+    <div class="play">ИГРАТЬ ▶</div>
+    <span class="url">parkur-3d.html</span>
+  </a>
 </body>
 </html>
