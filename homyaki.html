@@ -1,0 +1,611 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<title>Хомяки на поле — весёлый тир</title>
+<style>
+  * { box-sizing: border-box; }
+  html, body {
+    margin: 0; height: 100%; overflow: hidden;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    background: #20160c; color: #4a3418;
+    -webkit-user-select: none; user-select: none;
+  }
+  #game { display: flex; flex-direction: column; height: 100%; }
+
+  /* ===== Панель ===== */
+  #hud {
+    display: flex; align-items: center; gap: 16px; padding: 9px 16px;
+    font-size: 14px; z-index: 5; flex-wrap: wrap;
+    background: linear-gradient(180deg, #fff3d6, #ffe1a8);
+    border-bottom: 2px solid #d9a441;
+    color: #5a3d17;
+  }
+  #hud .item { white-space: nowrap; }
+  #hud .label { opacity: .65; margin-right: 4px; }
+  #hud .val { font-weight: 800; font-variant-numeric: tabular-nums; }
+  #hud .spacer { flex: 1; }
+  #combo { color: #e07b1a; font-weight: 800; }
+  #timebar-wrap { height: 8px; background: #e8cf9a; }
+  #timebar { height: 100%; width: 100%;
+    background: linear-gradient(90deg,#7ed957,#ffd23f,#ff7b54);
+    transition: width .1s linear; }
+
+  /* ===== Поле ===== */
+  #arena {
+    position: relative; flex: 1; overflow: hidden; cursor: pointer;
+    touch-action: manipulation;
+    /* небо и ровная земля без травы */
+    background:
+      linear-gradient(180deg,
+        #8fd3ff 0%, #bfe6ff 16%, #ffe9b8 30%,
+        #f2d391 30.5%, #e7c078 52%, #d9ad64 74%, #c99a4f 100%);
+  }
+
+  /* солнце */
+  #sun {
+    position: absolute; right: 12%; top: 5%; width: 90px; height: 90px;
+    border-radius: 50%; pointer-events: none;
+    background: radial-gradient(circle, #fff6c9 0 40%, #ffe066 70%, rgba(255,224,102,0) 72%);
+    box-shadow: 0 0 60px rgba(255,214,90,.8);
+  }
+  /* облака */
+  .cloud {
+    position: absolute; height: 34px; border-radius: 40px;
+    background: rgba(255,255,255,.85); pointer-events: none;
+    filter: blur(.3px); animation: drift linear infinite;
+  }
+  .cloud::before, .cloud::after {
+    content: ""; position: absolute; background: inherit; border-radius: 50%;
+  }
+  .cloud::before { width: 46px; height: 46px; top: -22px; left: 18px; }
+  .cloud::after  { width: 34px; height: 34px; top: -16px; right: 16px; }
+  @keyframes drift { from { transform: translateX(0); } to { transform: translateX(-40vw); } }
+
+  /* ровная земля: лёгкие горизонтальные полосы для глубины, без травы */
+  #field {
+    position: absolute; left: 0; right: 0; top: 30%; bottom: 0; pointer-events: none;
+    background:
+      repeating-linear-gradient(180deg,
+        rgba(120,86,40,.00) 0px, rgba(120,86,40,.00) 26px,
+        rgba(120,86,40,.06) 26px, rgba(120,86,40,.06) 28px);
+  }
+  /* камешки-крапинки */
+  .pebble {
+    position: absolute; border-radius: 50%; pointer-events: none;
+    background: rgba(120,86,40,.28);
+  }
+
+  /* ===== Норка ===== */
+  .hole { position: absolute; }
+  .hole .burrow {
+    position: absolute; left: 8%; right: 8%; top: 42%; height: 16%;
+    border-radius: 50%;
+    background: radial-gradient(ellipse at 50% 30%, #6b4a22, #3a2712 80%);
+    box-shadow: inset 0 4px 8px rgba(0,0,0,.6);
+    z-index: 1;
+  }
+  .hole .wrap {
+    position: absolute; left: 0; bottom: 50%; width: 100%; height: 150%;
+    overflow: hidden; z-index: 2;
+  }
+  .hole .lip {
+    position: absolute; left: 5%; right: 5%; top: 42%; height: 13%;
+    border-radius: 50%; z-index: 3; pointer-events: none;
+    background: radial-gradient(ellipse at 50% 20%, #8a6531, #4a3316 85%);
+    box-shadow: 0 3px 6px rgba(0,0,0,.35);
+  }
+
+  /* ===== Хомяк ===== */
+  .hamster {
+    position: absolute; bottom: 0; left: 50%; width: 88%;
+    transform: translate(-50%, 115%);
+    transition: transform .16s cubic-bezier(.3,1.5,.6,1);
+    will-change: transform; cursor: pointer;
+    filter: drop-shadow(0 3px 3px rgba(0,0,0,.25));
+  }
+  .hamster.up { transform: translate(-50%, 6%); }
+  .hamster.hit { transition: transform .16s, opacity .16s; opacity: 0; }
+  .hamster.hit .body { transform: scale(1.18); }
+  .hamster svg { width: 100%; height: auto; display: block; }
+  .hamster .body { transition: transform .12s; transform-origin: 50% 80%; }
+
+  /* всплывающие очки */
+  .float {
+    position: absolute; font-weight: 800; font-size: 20px; pointer-events: none;
+    text-shadow: 0 2px 0 #fff, 0 3px 6px rgba(0,0,0,.2);
+    animation: floatUp .75s ease-out forwards; z-index: 20; white-space: nowrap;
+    color: #e07b1a;
+  }
+  .float.gold { color: #d99a00; }
+  .float.bad  { color: #b03a2e; }
+  @keyframes floatUp {
+    from { transform: translate(-50%,-50%) scale(.7); opacity: 1; }
+    to   { transform: translate(-50%,-190%) scale(1.15); opacity: 0; }
+  }
+
+  /* звёздочки при попадании */
+  .star {
+    position: absolute; pointer-events: none; z-index: 19; color: #ffc93c;
+    font-size: 18px; animation: starFly .5s ease-out forwards;
+  }
+  @keyframes starFly {
+    from { transform: translate(-50%,-50%) scale(.4); opacity: 1; }
+    to   { transform: translate(-50%,-50%) scale(1.4) rotate(140deg); opacity: 0; }
+  }
+
+  /* ===== Оверлей ===== */
+  #overlay {
+    position: absolute; inset: 0; display: flex; align-items: center; justify-content: center;
+    background: rgba(40,26,10,.72); backdrop-filter: blur(4px); z-index: 30;
+    text-align: center; padding: 20px; overflow: auto;
+  }
+  #overlay.hidden { display: none; }
+  #overlay .card {
+    max-width: 480px; width: 100%; padding: 30px 28px; border-radius: 22px;
+    background: linear-gradient(180deg, #fff6de, #ffe7b3);
+    border: 3px solid #e0ac4c;
+    box-shadow: 0 22px 50px rgba(0,0,0,.35);
+    color: #5a3d17;
+  }
+  #overlay h1 { margin: 0 0 8px; font-size: 34px; color: #c46a11; }
+  #overlay p { margin: 10px 0; line-height: 1.55; font-size: 15px; }
+  #overlay .big { font-size: 46px; font-weight: 800; color: #e07b1a; margin: 4px 0; }
+  #overlay button {
+    margin-top: 18px; padding: 14px 34px; font-size: 18px; font-weight: 800;
+    color: #fff; background: linear-gradient(180deg,#ffb347,#f08a1d);
+    border: none; border-radius: 14px; cursor: pointer;
+    box-shadow: 0 7px 0 #c26a0d, 0 10px 20px rgba(0,0,0,.2);
+    transition: transform .08s, box-shadow .08s;
+  }
+  #overlay button:hover { transform: translateY(-1px); }
+  #overlay button:active { transform: translateY(4px); box-shadow: 0 3px 0 #c26a0d; }
+  #overlay button.ghost {
+    background: rgba(255,255,255,.7); color: #7a5620;
+    box-shadow: 0 4px 0 #d9b878;
+  }
+  #overlay .row { display: flex; justify-content: center; gap: 26px; margin-top: 14px; flex-wrap: wrap; }
+  #overlay .row .col { opacity: .85; font-size: 13px; }
+  #overlay .row .col b { display: block; font-size: 24px; margin-top: 4px; color: #c46a11; }
+  #overlay .board { margin: 10px auto 0; max-width: 340px; }
+  #overlay .board .line {
+    display: flex; gap: 10px; justify-content: center; padding: 5px 12px;
+    border-radius: 9px; font-size: 14px; margin-bottom: 4px; background: rgba(255,255,255,.5);
+  }
+  #overlay .board .rank { width: 20px; opacity: .6; }
+  #overlay .board .m { width: 70px; opacity: .7; font-size: 12px; }
+  #overlay .board .s { font-weight: 800; color: #e07b1a; }
+  #overlay .legend { display: flex; justify-content: center; gap: 18px; flex-wrap: wrap; margin-top: 14px; font-size: 13px; }
+  #overlay .legend span { display: inline-flex; align-items: center; gap: 6px; }
+  #overlay .legend i { width: 16px; height: 16px; border-radius: 50%; display: inline-block; border: 2px solid #fff; }
+</style>
+</head>
+<body>
+  <div id="game">
+    <div id="hud">
+      <div class="item"><span class="label">Очки:</span><span class="val" id="score">0</span></div>
+      <div class="item"><span class="label">Время:</span><span class="val" id="time">60</span></div>
+      <div class="item"><span class="label">Точность:</span><span class="val" id="acc">—</span></div>
+      <div class="item" id="combo"></div>
+      <div class="spacer"></div>
+      <div class="item"><span class="label">Рекорд:</span><span class="val" id="best">0</span></div>
+    </div>
+    <div id="timebar-wrap"><div id="timebar"></div></div>
+
+    <div id="arena">
+      <div id="sun"></div>
+      <div id="field"></div>
+      <div id="overlay"></div>
+    </div>
+  </div>
+
+<script>
+(function () {
+  "use strict";
+
+  /* ===================== НАСТРОЙКИ ===================== */
+  var DURATION   = 60;     // длительность раунда, сек
+  var START_GAP  = 780;    // старт: пауза между хомяками, мс
+  var MIN_GAP    = 280;    // самая быстрая пауза
+  var START_LIFE = 1900;   // старт: сколько хомяк сидит, мс
+  var MIN_LIFE   = 720;    // самая короткая жизнь
+  var ROWS       = 3;      // рядов норок на поле
+  /* ==================================================== */
+
+  var arena   = document.getElementById("arena");
+  var overlay = document.getElementById("overlay");
+  var scoreEl = document.getElementById("score");
+  var timeEl  = document.getElementById("time");
+  var accEl   = document.getElementById("acc");
+  var bestEl  = document.getElementById("best");
+  var comboEl = document.getElementById("combo");
+  var timeBar = document.getElementById("timebar");
+
+  var running = false;
+  var score = 0, shots = 0, hits = 0, combo = 0;
+  var timeLeft = DURATION;
+  var tickTimer = null, spawnTimer = null;
+  var holes = [];
+  var best = parseInt(localStorage.getItem("hamster_best") || "0", 10) || 0;
+  bestEl.textContent = best;
+
+  /* ===================== ЗВУКИ ===================== */
+  var audioCtx = null;
+  function getAudio() {
+    if (!audioCtx) {
+      var AC = window.AudioContext || window.webkitAudioContext;
+      if (AC) audioCtx = new AC();
+    }
+    if (audioCtx && audioCtx.state === "suspended") audioCtx.resume();
+    return audioCtx;
+  }
+  function tone(freq, to, dur, type, vol) {
+    var ac = getAudio(); if (!ac) return;
+    var t = ac.currentTime;
+    var o = ac.createOscillator(); o.type = type || "sine";
+    o.frequency.setValueAtTime(freq, t);
+    if (to) o.frequency.exponentialRampToValueAtTime(to, t + dur);
+    var g = ac.createGain();
+    g.gain.setValueAtTime(0.0001, t);
+    g.gain.exponentialRampToValueAtTime(vol || 0.2, t + 0.01);
+    g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+    o.connect(g); g.connect(ac.destination);
+    o.start(t); o.stop(t + dur + 0.05);
+  }
+  function sndPop()   { tone(520, 900, 0.09, "sine", 0.12); }
+  function sndHit()   { tone(760, 1200, 0.1, "triangle", 0.2); setTimeout(function(){ tone(1100,1500,.09,"triangle",.14); }, 70); }
+  function sndGold()  { tone(1000, 1600, 0.1, "square", 0.12); setTimeout(function(){ tone(1400,2100,.12,"square",.1); }, 90); }
+  function sndMiss()  { tone(220, 150, 0.1, "sine", 0.1); }
+  function sndLevel() { tone(600, 1100, 0.15, "triangle", 0.16); }
+
+  /* ===================== ХОМЯК (SVG) ===================== */
+  var TYPES = {
+    brown:  { body: "#c08a4e", belly: "#f0dcbb", ear: "#e8b7a0", pts: 30 },
+    gray:   { body: "#a9b0b6", belly: "#e6ebee", ear: "#e6b8c0", pts: 35 },
+    white:  { body: "#f2f0ea", belly: "#ffffff", ear: "#f2b8c0", pts: 40 },
+    orange: { body: "#e0954a", belly: "#f7d9b0", ear: "#f0a98a", pts: 45 },
+    gold:   { body: "#f2c14e", belly: "#ffeaa6", ear: "#f7d488", pts: 120 }
+  };
+
+  function hamsterSVG(type) {
+    var c = TYPES[type];
+    var crown = type === "gold"
+      ? '<path d="M34 22 L40 12 L50 20 L60 12 L66 22 Z" fill="#ffcf3f" stroke="#e0a800" stroke-width="1.5"/>'
+      : "";
+    return '<svg viewBox="0 0 100 100">' +
+      '<g class="body">' +
+        // лапки
+        '<ellipse cx="35" cy="88" rx="9" ry="6" fill="' + c.body + '"/>' +
+        '<ellipse cx="65" cy="88" rx="9" ry="6" fill="' + c.body + '"/>' +
+        // уши
+        '<circle cx="27" cy="30" r="13" fill="' + c.body + '"/>' +
+        '<circle cx="73" cy="30" r="13" fill="' + c.body + '"/>' +
+        '<circle cx="27" cy="30" r="7" fill="' + c.ear + '"/>' +
+        '<circle cx="73" cy="30" r="7" fill="' + c.ear + '"/>' +
+        // тело
+        '<ellipse cx="50" cy="60" rx="35" ry="31" fill="' + c.body + '"/>' +
+        // живот
+        '<ellipse cx="50" cy="66" rx="21" ry="19" fill="' + c.belly + '"/>' +
+        // щёчки
+        '<circle cx="24" cy="64" r="7" fill="' + c.ear + '" opacity=".75"/>' +
+        '<circle cx="76" cy="64" r="7" fill="' + c.ear + '" opacity=".75"/>' +
+        // глаза
+        '<circle cx="38" cy="54" r="5" fill="#2b2018"/>' +
+        '<circle cx="62" cy="54" r="5" fill="#2b2018"/>' +
+        '<circle cx="39.6" cy="52.4" r="1.8" fill="#fff"/>' +
+        '<circle cx="63.6" cy="52.4" r="1.8" fill="#fff"/>' +
+        // носик и ротик
+        '<ellipse cx="50" cy="63" rx="3" ry="2.2" fill="#e07b7b"/>' +
+        '<path d="M50 65 Q46 70 43 67 M50 65 Q54 70 57 67" stroke="#8a6a4a" stroke-width="1.4" fill="none" stroke-linecap="round"/>' +
+        // усы
+        '<path d="M40 64 L26 60 M40 67 L27 68 M60 64 L74 60 M60 67 L73 68" stroke="#b9a488" stroke-width="1" stroke-linecap="round"/>' +
+        crown +
+      '</g>' +
+    '</svg>';
+  }
+
+  /* ===================== ПОЛЕ / НОРКИ ===================== */
+  function buildEnvironment() {
+    // облака
+    var old = arena.querySelectorAll(".cloud, .pebble");
+    for (var i = 0; i < old.length; i++) old[i].remove();
+    for (var cl = 0; cl < 4; cl++) {
+      var cloud = document.createElement("div");
+      cloud.className = "cloud";
+      cloud.style.width = (70 + Math.random() * 70) + "px";
+      cloud.style.left = (Math.random() * 90 + 10) + "%";
+      cloud.style.top = (4 + Math.random() * 16) + "%";
+      cloud.style.animationDuration = (30 + Math.random() * 25) + "s";
+      cloud.style.animationDelay = (-Math.random() * 20) + "s";
+      cloud.style.opacity = (0.5 + Math.random() * 0.4).toFixed(2);
+      arena.appendChild(cloud);
+    }
+    // крапинки на земле
+    for (var pk = 0; pk < 60; pk++) {
+      var peb = document.createElement("div");
+      peb.className = "pebble";
+      var s = 1.5 + Math.random() * 3;
+      peb.style.width = s + "px"; peb.style.height = s * .7 + "px";
+      peb.style.left = (Math.random() * 98) + "%";
+      peb.style.top = (34 + Math.random() * 62) + "%";
+      peb.style.opacity = (0.25 + Math.random() * 0.4).toFixed(2);
+      arena.appendChild(peb);
+    }
+  }
+
+  function buildHoles() {
+    // убираем старые
+    for (var i = 0; i < holes.length; i++) holes[i].el.remove();
+    holes = [];
+
+    var W = arena.clientWidth, H = arena.clientHeight;
+    var fieldTop = H * 0.34;                 // где начинается земля
+    var fieldH = H - fieldTop;
+
+    for (var r = 0; r < ROWS; r++) {
+      var depth = r / (ROWS - 1);            // 0 дальний (верх), 1 ближний (низ)
+      var size = 80 + depth * 72;            // ближние норки крупнее (перспектива)
+      var rowY = fieldTop + fieldH * (0.28 + depth * 0.64);
+      var count = 5 - r;                     // в дальнем ряду норок больше
+      for (var c = 0; c < count; c++) {
+        var x = W * (0.12 + (c + 0.5) / count * 0.76) + (Math.random() - 0.5) * W * 0.06;
+        var y = rowY + (Math.random() - 0.5) * fieldH * 0.06;
+        x = Math.max(size / 2, Math.min(W - size / 2, x));
+        y = Math.max(fieldTop + size * 0.4, Math.min(H - size * 0.25, y));
+        createHole(x, y, size);
+      }
+    }
+  }
+
+  function createHole(cx, cy, size) {
+    var el = document.createElement("div");
+    el.className = "hole";
+    el.style.width = size + "px";
+    el.style.height = size + "px";
+    el.style.left = (cx - size / 2) + "px";
+    el.style.top = (cy - size / 2) + "px";
+    el.innerHTML = '<div class="burrow"></div><div class="wrap"></div><div class="lip"></div>';
+    arena.appendChild(el);
+    holes.push({ el: el, wrap: el.querySelector(".wrap"), busy: false,
+                 size: size, x: cx, y: cy });
+  }
+
+  /* ===================== ХОМЯКИ ===================== */
+  function randType(progress) {
+    var r = Math.random();
+    if (r < 0.10 + progress * 0.05) return "gold";
+    if (r < 0.30) return "white";
+    if (r < 0.55) return "orange";
+    if (r < 0.78) return "gray";
+    return "brown";
+  }
+
+  function spawnHamster() {
+    if (!running) return;
+
+    // свободные норки
+    var free = [];
+    for (var i = 0; i < holes.length; i++) if (!holes[i].busy) free.push(holes[i]);
+    if (free.length === 0) { scheduleNext(); return; }
+
+    var hole = free[Math.floor(Math.random() * free.length)];
+    hole.busy = true;
+
+    var progress = (DURATION - timeLeft) / DURATION;
+    var type = randType(progress);
+
+    var el = document.createElement("div");
+    el.className = "hamster";
+    el.innerHTML = hamsterSVG(type);
+
+    var data = { el: el, type: type, dead: false, hole: hole };
+    el.__h = data;
+
+    el.addEventListener("pointerdown", function (e) {
+      e.stopPropagation();
+      if (!running || data.dead) return;
+      data.dead = true;
+
+      var rect = arena.getBoundingClientRect();
+      var px = e.clientX - rect.left, py = e.clientY - rect.top;
+
+      shots++; hits++; combo++;
+      soundHitFor(type);
+      var c = TYPES[type];
+      var mult = Math.min(1 + (combo - 1) * 0.1, 3);
+      var gained = Math.round(c.pts * mult);
+      score += gained;
+
+      floatText(px, py, "+" + gained + (combo >= 3 ? " x" + mult.toFixed(1) : ""), type === "gold" ? "gold" : "");
+      stars(px, py, type === "gold" ? 6 : 3);
+      el.classList.remove("up");
+      el.classList.add("hit");
+      setTimeout(function () { el.remove(); }, 180);
+      endHole(hole);
+      updateHUD();
+    });
+
+    hole.wrap.appendChild(el);
+    // поднимаем
+    requestAnimationFrame(function () {
+      requestAnimationFrame(function () { el.classList.add("up"); });
+    });
+    sndPop();
+
+    var life = rand(MIN_LIFE, START_LIFE) * (1 - progress * 0.4);
+    data.timer = setTimeout(function () {
+      if (data.dead) return;
+      // спрятался сам
+      data.dead = true;
+      combo = 0;
+      el.classList.remove("up");
+      setTimeout(function () { el.remove(); }, 200);
+      endHole(hole);
+      updateHUD();
+    }, life + 160);
+
+    scheduleNext();
+  }
+
+  function endHole(hole) {
+    setTimeout(function () { hole.busy = false; }, 260);
+  }
+
+  function soundHitFor(type) {
+    if (type === "gold") sndGold();
+    else sndHit();
+  }
+
+  function scheduleNext() {
+    var progress = (DURATION - timeLeft) / DURATION;
+    var gap = Math.max(MIN_GAP, START_GAP - progress * (START_GAP - MIN_GAP));
+    gap *= 0.7 + Math.random() * 0.7;
+    spawnTimer = setTimeout(spawnHamster, gap);
+  }
+
+  /* ===================== УТИЛИТЫ ===================== */
+  function rand(a, b) { return Math.random() * (b - a) + a; }
+
+  function floatText(x, y, text, cls) {
+    var el = document.createElement("div");
+    el.className = "float " + (cls || "");
+    el.textContent = text;
+    el.style.left = x + "px"; el.style.top = y + "px";
+    arena.appendChild(el);
+    setTimeout(function () { el.remove(); }, 760);
+  }
+  function stars(x, y, n) {
+    for (var i = 0; i < n; i++) {
+      var s = document.createElement("div");
+      s.className = "star";
+      s.textContent = "★";
+      s.style.left = (x + rand(-26, 26)) + "px";
+      s.style.top = (y + rand(-26, 26)) + "px";
+      s.style.animationDelay = (i * 0.03) + "s";
+      arena.appendChild(s);
+      (function (node) { setTimeout(function () { node.remove(); }, 560); })(s);
+    }
+  }
+
+  function accuracy() { return shots === 0 ? 0 : Math.round(hits / shots * 100); }
+
+  function updateHUD() {
+    scoreEl.textContent = score;
+    timeEl.textContent = Math.max(0, Math.ceil(timeLeft));
+    accEl.textContent = shots === 0 ? "—" : accuracy() + "%";
+    comboEl.textContent = combo >= 2 ? "🔥 " + combo + " подряд" : "";
+    timeBar.style.width = Math.max(0, (timeLeft / DURATION) * 100) + "%";
+  }
+
+  /* ===================== ПРОМАХ ===================== */
+  arena.addEventListener("pointerdown", function (e) {
+    if (!running) return;
+    if (e.target.closest && e.target.closest(".hamster")) return;
+    if (e.target.closest && e.target.closest("#overlay")) return;
+    var rect = arena.getBoundingClientRect();
+    var px = e.clientX - rect.left, py = e.clientY - rect.top;
+    shots++; combo = 0;
+    sndMiss();
+    floatText(px, py, "мимо", "bad");
+    updateHUD();
+  });
+
+  /* ===================== СТАРТ / КОНЕЦ ===================== */
+  function clearHamsters() {
+    var list = arena.querySelectorAll(".hamster, .float, .star");
+    for (var i = 0; i < list.length; i++) list[i].remove();
+    for (var j = 0; j < holes.length; j++) holes[j].busy = false;
+  }
+
+  function showStart() {
+    overlay.classList.remove("hidden");
+    overlay.innerHTML =
+      '<div class="card">' +
+        '<h1>🐹 Хомяки на поле</h1>' +
+        '<p>Хомяки выглядывают из норок на поле.<br>' +
+        'Успей <b>кликнуть</b> по хомяку, пока он не спрятался!<br>' +
+        'Чем быстрее и реже хомяк — тем больше очков.</p>' +
+        '<p>Попадай подряд — растёт множитель до <b>x3</b>.</p>' +
+        '<div class="legend">' +
+          '<span><i style="background:#c08a4e"></i>обычный 30</span>' +
+          '<span><i style="background:#f2f0ea"></i>белый 40</span>' +
+          '<span><i style="background:#f2c14e"></i>👑 золотой 120</span>' +
+        '</div>' +
+        '<p style="margin-top:14px">У тебя <b>' + DURATION + ' секунд</b>. Ловить!</p>' +
+        '<button>Начать игру</button>' +
+      '</div>';
+  }
+
+  function showGameOver() {
+    var acc = accuracy();
+    var isRecord = score > best;
+    if (isRecord) { best = score; localStorage.setItem("hamster_best", String(best)); }
+    bestEl.textContent = best;
+
+    overlay.classList.remove("hidden");
+    overlay.innerHTML =
+      '<div class="card">' +
+        '<h1>' + (isRecord ? "🏆 Новый рекорд!" : "Время вышло!") + '</h1>' +
+        '<div class="big">' + score + '</div>' +
+        '<div class="row">' +
+          '<div class="col">Поймано<b>' + hits + '</b></div>' +
+          '<div class="col">Точность<b>' + acc + '%</b></div>' +
+          '<div class="col">Рекорд<b>' + best + '</b></div>' +
+        '</div>' +
+        '<button>Играть снова</button>' +
+      '</div>';
+  }
+
+  function startGame() {
+    getAudio();
+    clearTimeout(spawnTimer);
+    clearInterval(tickTimer);
+    clearHamsters();
+    buildHoles();
+
+    running = true;
+    score = 0; shots = 0; hits = 0; combo = 0; timeLeft = DURATION;
+    overlay.classList.add("hidden");
+    updateHUD();
+
+    tickTimer = setInterval(function () {
+      timeLeft -= 0.1;
+      if (timeLeft <= 0) { timeLeft = 0; updateHUD(); endGame(); return; }
+      updateHUD();
+    }, 100);
+
+    // первый хомяк чуть позже
+    spawnTimer = setTimeout(spawnHamster, 500);
+  }
+
+  function endGame() {
+    running = false;
+    clearTimeout(spawnTimer);
+    clearInterval(tickTimer);
+    clearHamsters();
+    showGameOver();
+  }
+
+  overlay.addEventListener("click", function (e) {
+    var btn = e.target.closest && e.target.closest("button");
+    if (!btn) return;
+    startGame();
+  });
+
+  document.addEventListener("keydown", function (e) {
+    if (!running && (e.key === " " || e.key === "Enter")) { e.preventDefault(); startGame(); }
+  });
+
+  window.addEventListener("resize", function () {
+    if (running) buildHoles();
+  });
+
+  buildEnvironment();
+  buildHoles();
+  updateHUD();
+  showStart();
+})();
+</script>
+</body>
+</html>
