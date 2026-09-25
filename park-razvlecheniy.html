@@ -191,6 +191,7 @@
   var CAM_DIST    = 0;       // от первого лица — камера в глазах
   var CAM_HEIGHT  = 3.2;     // высота глаз
   var CAM_TARGET  = 3.2;
+  var CAM_PITCH   = 0.06;    // лёгкий наклон вниз
   var ROOF_H      = 95;      // высота крыши (крытый парк!)
   var MON_BASE    = 13;
   var MON_RAMP    = 0.12;
@@ -224,7 +225,12 @@
 
   function resize() {
     var r = arena.getBoundingClientRect();
-    W = Math.max(1, r.width); H = Math.max(1, r.height);
+    var w = r.width, h = r.height;
+    // запасные варианты, если layout ещё не готов
+    if (w < 10 || h < 10) w = arena.clientWidth;
+    if (w < 10 || h < 10) h = arena.clientHeight;
+    if (w < 10 || h < 10) { w = window.innerWidth; h = Math.max(200, window.innerHeight - 60); }
+    W = Math.max(1, w); H = Math.max(1, h);
     DPR = Math.min(window.devicePixelRatio || 1, 2);
     canvas.width = Math.round(W * DPR);
     canvas.height = Math.round(H * DPR);
@@ -236,7 +242,7 @@
   if (isMobile) mobileEl.classList.add("on");
 
   /* ---------------------- Состояние ---------------------- */
-  var cam = { x: 0, y: CAM_HEIGHT, z: 0, yaw: 0 };
+  var cam = { x: 0, y: CAM_HEIGHT, z: 0, yaw: 0, pitch: CAM_PITCH };
   var player = { x: 0, z: 180, y: 0, facing: 0, walk: 0 };
   var monster = { x: 0, z: -180, anim: 0, lunge: 0 };
   var boxes = [], solids = [], bills = [], tickets = [], particles = [], clouds = [], lamps = [];
@@ -1654,42 +1660,69 @@
     if (btn) { e.preventDefault(); startGame(); }
   });
 
+  var frameErrShown = false;
   function frame(ts) {
     var dt = lastTs ? Math.min((ts - lastTs)/1000, 0.033) : 0.016;
     lastTs = ts;
     lastFrameDt = dt;
-    if (running) {
-      var steps = 2, h = dt/steps;
-      for (var i = 0; i < steps && running; i++) update(h);
-      timeEl.textContent = fmtTime(timeNow);
-      stamFill.style.width = stamina + "%";
+
+    // --- обновление (ошибка не должна убивать цикл) ---
+    try {
+      if (W < 10 || H < 10) resize();
+      if (running) {
+        var steps = 2, h = dt / steps;
+        for (var i = 0; i < steps && running; i++) update(h);
+        timeEl.textContent = fmtTime(timeNow);
+        stamFill.style.width = stamina + "%";
+      }
+      if (rideMsgT > 0) {
+        rideMsgT -= dt;
+        rideMsgEl.textContent = rideMsgTxt;
+        rideMsgEl.classList.add("on");
+        if (rideMsgT <= 0) rideMsgEl.classList.remove("on");
+      }
+      if (running && !riding && nearRide) {
+        ridePromptEl.innerHTML = "🎢 ПРОБЕЛ — покататься";
+        ridePromptEl.classList.add("on");
+      } else if (running && riding) {
+        ridePromptEl.innerHTML = "⏹️ ПРОБЕЛ — слезть";
+        ridePromptEl.classList.add("on");
+      } else {
+        ridePromptEl.classList.remove("on");
+      }
+    } catch (err) {
+      showFrameError(err);
     }
-    // подсказка и сообщение катания
-    if (rideMsgT > 0) {
-      rideMsgT -= dt;
-      rideMsgEl.textContent = rideMsgTxt;
-      rideMsgEl.classList.add("on");
-      if (rideMsgT <= 0) rideMsgEl.classList.remove("on");
+
+    // --- отрисовка (тоже не должна убивать цикл) ---
+    try {
+      render();
+    } catch (err) {
+      showFrameError(err);
     }
-    if (running && !riding && nearRide) {
-      ridePromptEl.innerHTML = "🎢 " + (nearRide.price > 0 ? "ПРОБЕЛ — покататься (" + nearRide.price + " 🎫)" : "ПРОБЕЛ — покататься");
-      ridePromptEl.classList.add("on");
-    } else if (running && riding) {
-      ridePromptEl.innerHTML = "⏹️ ПРОБЕЛ — слезть";
-      ridePromptEl.classList.add("on");
-    } else {
-      ridePromptEl.classList.remove("on");
-    }
-    render();
+
     rafId = requestAnimationFrame(frame);
   }
 
+  function showFrameError(err) {
+    if (frameErrShown) return;
+    frameErrShown = true;
+    var msg = (err && err.message) ? err.message : String(err);
+    overlay.classList.remove("hidden");
+    overlay.innerHTML = '<div class="card"><h1>Ошибка 😔</h1>' +
+      '<p style="font-size:13px;word-break:break-word">' + msg + '</p>' +
+      '<p style="font-size:12px;opacity:.7">Сделай скриншот — я исправлю.</p></div>';
+  }
+
   window.addEventListener("resize", resize);
+  window.addEventListener("orientationchange", function () { setTimeout(resize, 300); });
 
   resize();
   buildPark();
   updateHUD();
   showStart();
+  setTimeout(resize, 50);
+  setTimeout(resize, 400);
   if (!rafId) rafId = requestAnimationFrame(frame);
 })();
 </script>
