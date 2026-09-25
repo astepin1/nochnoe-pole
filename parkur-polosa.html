@@ -1,0 +1,1023 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<title>Паркур-полоса 3D 🔥</title>
+<style>
+  * { box-sizing: border-box; }
+  html, body {
+    margin: 0; height: 100%; overflow: hidden; background: #0a0a12;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    color: #fff; -webkit-user-select: none; user-select: none;
+  }
+  #game { display: flex; flex-direction: column; height: 100%; }
+
+  /* ===== HUD ===== */
+  #hud {
+    display: flex; align-items: center; gap: 16px; padding: 8px 16px;
+    font-size: 14px; z-index: 6; flex-wrap: wrap;
+    background: linear-gradient(180deg, rgba(20,24,40,.96), rgba(12,14,26,.9));
+    border-bottom: 1px solid rgba(255,150,80,.3);
+  }
+  #hud .item { white-space: nowrap; }
+  #hud .label { opacity: .6; margin-right: 5px; font-size: 11px; text-transform: uppercase; letter-spacing: .05em; }
+  #hud .val { font-weight: 800; font-variant-numeric: tabular-nums; }
+  #stage-num { color: #ffd76e; font-size: 17px; }
+  #hud .spacer { flex: 1; }
+  #time { color: #8fe0ff; }
+  #best { color: #8dffb4; }
+
+  /* ===== Сцена ===== */
+  #arena { position: relative; flex: 1; overflow: hidden; background: #0a0a12; touch-action: none; }
+  #view { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
+
+  /* прицел */
+  #cross {
+    position: absolute; left: 50%; top: 50%; transform: translate(-50%,-50%);
+    z-index: 5; pointer-events: none; width: 22px; height: 22px; opacity: .55;
+  }
+  #cross::before, #cross::after {
+    content: ""; position: absolute; background: #fff; box-shadow: 0 0 4px rgba(0,0,0,.8);
+  }
+  #cross::before { left: 50%; top: 0; width: 2px; height: 100%; margin-left: -1px; }
+  #cross::after { top: 50%; left: 0; height: 2px; width: 100%; margin-top: -1px; }
+
+  /* затемнение по краям (подводный/лавы жар) */
+  #vign { position: absolute; inset: 0; pointer-events: none; z-index: 4;
+    box-shadow: inset 0 0 180px rgba(0,0,0,.75); }
+
+  /* вспышка урона */
+  #dmg { position: absolute; inset: 0; pointer-events: none; z-index: 5; opacity: 0;
+    background: radial-gradient(circle, transparent 30%, rgba(255,90,20,.75)); }
+  #dmg.on { animation: dmgf .5s; }
+  @keyframes dmgf { 0% { opacity: 1; } 100% { opacity: 0; } }
+
+  /* таймер-босс сверху */
+  #bossWrap { position: absolute; left: 50%; top: 12px; transform: translateX(-50%);
+    z-index: 7; width: min(70%, 420px); pointer-events: none; text-align: center; }
+  #bossBar { position: relative; height: 14px; border-radius: 9px;
+    background: rgba(10,10,20,.6); border: 1px solid rgba(255,120,60,.4); overflow: hidden; }
+  #bossFill { height: 100%; width: 100%; border-radius: 9px;
+    background: linear-gradient(90deg,#ff5a2a,#ffd76e); transition: width .15s linear; }
+  #bossTxt { font-size: 12px; margin-top: 4px; opacity: .9; text-shadow: 0 2px 6px #000; }
+
+  /* сообщения */
+  #toast {
+    position: absolute; left: 50%; top: 34%; transform: translateX(-50%);
+    z-index: 10; padding: 12px 26px; border-radius: 16px; white-space: nowrap;
+    background: rgba(255,140,40,.95); color: #1a0a00; font-size: 18px; font-weight: 800;
+    pointer-events: none; opacity: 0; box-shadow: 0 8px 24px rgba(0,0,0,.5);
+  }
+  #toast.on { opacity: 1; animation: tIn .3s; }
+  @keyframes tIn { from { transform: translateX(-50%) scale(.7); } to { transform: translateX(-50%) scale(1); } }
+
+  /* цель-стрелка */
+  #goal {
+    position: absolute; z-index: 6; font-size: 26px; pointer-events: none;
+    filter: drop-shadow(0 2px 6px rgba(0,0,0,.6)); transition: opacity .2s;
+  }
+
+  /* ===== Оверлей ===== */
+  #overlay { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center;
+    background: rgba(8,8,16,.9); backdrop-filter: blur(6px); z-index: 30;
+    text-align: center; padding: 20px; overflow: auto; }
+  #overlay.hidden { display: none; }
+  #overlay .card { max-width: 580px; width: 100%; padding: 30px 28px; border-radius: 24px;
+    background: linear-gradient(180deg, rgba(44,30,24,.97), rgba(26,16,14,.99));
+    border: 2px solid rgba(255,150,80,.4);
+    box-shadow: 0 24px 70px rgba(0,0,0,.8), 0 0 90px rgba(255,120,40,.12) inset; }
+  #overlay h1 { margin: 0 0 8px; font-size: 31px;
+    background: linear-gradient(90deg,#ffd76e,#ff8a4a,#ff5a3c);
+    -webkit-background-clip: text; background-clip: text; -webkit-text-fill-color: transparent; }
+  #overlay p { margin: 10px 0; line-height: 1.6; font-size: 15px; opacity: .93; }
+  #overlay .keys { display: flex; flex-direction: column; gap: 8px; margin: 16px auto 0; max-width: 440px; }
+  #overlay .keys div { display: flex; align-items: center; gap: 12px; font-size: 14px; }
+  #overlay .key { display: inline-block; min-width: 36px; text-align: center; padding: 5px 10px;
+    border-radius: 8px; background: rgba(255,255,255,.12); border: 1px solid rgba(255,255,255,.2);
+    font-weight: 800; font-size: 12px; }
+  #overlay button { margin-top: 20px; padding: 15px 40px; font-size: 18px; font-weight: 800;
+    color: #2a1000; background: linear-gradient(180deg,#ffcf8a,#ff8a3d);
+    border: none; border-radius: 14px; cursor: pointer;
+    box-shadow: 0 8px 26px rgba(255,130,60,.4); transition: transform .1s, box-shadow .15s;
+    font-family: inherit; }
+  #overlay button:hover { transform: translateY(-2px); box-shadow: 0 12px 32px rgba(255,130,60,.55); }
+  #overlay button:active { transform: translateY(1px) scale(.98); }
+  #overlay .big { font-size: 44px; font-weight: 800; color: #ffd76e; margin: 6px 0; }
+  #overlay .row { display: flex; justify-content: center; gap: 26px; margin-top: 14px; flex-wrap: wrap; }
+  #overlay .row .col { opacity: .9; font-size: 12px; text-transform: uppercase; letter-spacing: .06em; }
+  #overlay .row .col b { display: block; font-size: 23px; margin-top: 4px; color: #fff; letter-spacing: 0; }
+  #overlay .legend { display: flex; justify-content: center; gap: 12px; flex-wrap: wrap;
+    margin-top: 16px; font-size: 13px; opacity: .92; }
+  #overlay .legend span { display: inline-flex; align-items: center; gap: 6px;
+    background: rgba(255,255,255,.08); padding: 6px 12px; border-radius: 999px; }
+
+  /* ===== Мобильное управление ===== */
+  #mobile { position: absolute; inset: 0; z-index: 14; pointer-events: none; display: none; }
+  #mobile.on { display: block; }
+  #joy { position: absolute; left: 20px; bottom: 26px; width: 138px; height: 138px;
+    border-radius: 50%; pointer-events: auto;
+    background: radial-gradient(circle, rgba(255,255,255,.16), rgba(255,255,255,.05));
+    border: 2px solid rgba(255,255,255,.35); touch-action: none; }
+  #joyKnob { position: absolute; left: 50%; top: 50%; width: 60px; height: 60px;
+    margin: -30px 0 0 -30px; border-radius: 50%;
+    background: radial-gradient(circle at 40% 35%, #ffd0a8, #ff6a2a);
+    box-shadow: 0 4px 12px rgba(0,0,0,.4); }
+  .mbtn { position: absolute; pointer-events: auto; border-radius: 50%;
+    display: flex; align-items: center; justify-content: center;
+    background: rgba(255,255,255,.16); border: 2px solid rgba(255,255,255,.36);
+    color: #fff; backdrop-filter: blur(3px); touch-action: none;
+    box-shadow: 0 4px 12px rgba(0,0,0,.4); user-select: none; }
+  .mbtn.press { background: rgba(255,140,60,.6); transform: scale(.94); }
+  #btnJump { right: 24px; bottom: 40px; width: 100px; height: 100px; font-size: 42px; }
+  #lookZone { position: absolute; right: 0; top: 0; width: 55%; height: 100%;
+    pointer-events: auto; touch-action: none; }
+</style>
+</head>
+<body>
+  <div id="game">
+    <div id="hud">
+      <div class="item"><span class="label">Этап</span><span class="val" id="stage-num">1/8</span></div>
+      <div class="item"><span class="label">Попытки</span><span class="val" id="deaths">0</span></div>
+      <div class="item"><span class="label">Чекпоинт</span><span class="val" id="cp">старт</span></div>
+      <div class="spacer"></div>
+      <div class="item"><span class="label">Время</span><span class="val" id="time">0:00</span></div>
+      <div class="item"><span class="label">Рекорд</span><span class="val" id="best">—</span></div>
+    </div>
+
+    <div id="arena">
+      <canvas id="view"></canvas>
+      <div id="vign"></div>
+      <div id="cross"></div>
+      <div id="dmg"></div>
+      <div id="goal">⬇️ ЦЕЛЬ</div>
+      <div id="toast"></div>
+      <div id="bossWrap">
+        <div id="bossBar"><span id="bossFill"></span></div>
+        <div id="bossTxt">⏱️ успей до конца</div>
+      </div>
+      <div id="mobile">
+        <div id="joy"><div id="joyKnob"></div></div>
+        <div class="mbtn" id="btnJump">⤒</div>
+        <div id="lookZone"></div>
+      </div>
+      <div id="overlay"></div>
+    </div>
+  </div>
+
+<script>
+(function () {
+  "use strict";
+
+  /* ======================= НАСТРОЙКИ ======================= */
+  var GRAVITY     = 30;
+  var MOVE_ACCEL  = 70;
+  var MAX_SPEED   = 11;
+  var FRICTION    = 8;
+  var AIR_CTRL    = 0.4;
+  var JUMP_VEL    = 11;
+  var EYE         = 3.2;      // высота глаз
+  var RADIUS      = 1.1;      // радиус игрока
+  var CAM_PITCH   = 0.14;
+  var STAGE_TIME  = 75;       // время на этап (сек)
+  var FALL_Y      = -28;      // ниже — упал
+  /* ========================================================= */
+
+  var arena  = document.getElementById("arena");
+  var canvas = document.getElementById("view");
+  var ctx    = canvas.getContext("2d");
+  var overlay = document.getElementById("overlay");
+  var stageEl = document.getElementById("stage-num");
+  var deathsEl = document.getElementById("deaths");
+  var cpEl   = document.getElementById("cp");
+  var timeEl = document.getElementById("time");
+  var bestEl = document.getElementById("best");
+  var goalEl = document.getElementById("goal");
+  var dmgEl  = document.getElementById("dmg");
+  var toastEl = document.getElementById("toast");
+  var bossFill = document.getElementById("bossFill");
+  var bossTxt = document.getElementById("bossTxt");
+  var mobileEl = document.getElementById("mobile");
+
+  var W = 1, H = 1, DPR = 1, FOCAL = 700;
+
+  function resize() {
+    var r = arena.getBoundingClientRect();
+    W = Math.max(1, r.width); H = Math.max(1, r.height);
+    DPR = Math.min(window.devicePixelRatio || 1, 2);
+    canvas.width = Math.round(W * DPR);
+    canvas.height = Math.round(H * DPR);
+    ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
+    FOCAL = H * 0.95;
+  }
+
+  var isMobile = ("ontouchstart" in window) || navigator.maxTouchPoints > 0;
+  if (isMobile) mobileEl.classList.add("on");
+
+  /* ---------------------- Состояние ---------------------- */
+  var cam = { x: 0, y: 0, z: 0, yaw: 0, pitch: CAM_PITCH };
+  var player = { x: 0, y: 3, z: 0, vx: 0, vy: 0, vz: 0, onGround: false, jumps: 0, walk: 0 };
+  var blocks = [];       // платформы {x,y,z,w,h,d,type,...}
+  var lava = [];         // лава
+  var moving = [];       // движущиеся блоки
+  var spinning = [];     // вращающиеся балки
+  var checkpoints = [];
+  var particles = [];
+  var stage = 1, STAGES = 8;
+  var timeLeft = STAGE_TIME;
+  var deaths = 0, running = false, won = false;
+  var spawn = { x: 0, y: 3, z: 0 };
+  var goalPos = { x: 0, y: 0, z: 0 };
+  var lastTs = 0, rafId = null, timeNow = 0;
+  var shakeT = 0, shakeMag = 0;
+  var keys = {};
+  var mousePitch = 0;
+
+  function loadBest() {
+    try { return parseFloat(localStorage.getItem("obb3d_best") || "0") || 0; }
+    catch (e) { return 0; }
+  }
+
+  /* ---------------------- Звук ---------------------- */
+  var audioCtx = null;
+  function getAudio() {
+    if (!audioCtx) { var AC = window.AudioContext || window.webkitAudioContext; if (AC) audioCtx = new AC(); }
+    if (audioCtx && audioCtx.state === "suspended") audioCtx.resume();
+    return audioCtx;
+  }
+  function tone(f, to, dur, type, vol, delay) {
+    var ac = getAudio(); if (!ac) return;
+    var t = ac.currentTime + (delay || 0);
+    var o = ac.createOscillator(); o.type = type || "sine";
+    o.frequency.setValueAtTime(f, t);
+    if (to) o.frequency.exponentialRampToValueAtTime(Math.max(1, to), t + dur);
+    var g = ac.createGain();
+    g.gain.setValueAtTime(0.0001, t);
+    g.gain.exponentialRampToValueAtTime(vol || 0.15, t + 0.02);
+    g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+    o.connect(g); g.connect(ac.destination);
+    o.start(t); o.stop(t + dur + 0.05);
+  }
+  function noise(dur, cut, vol) {
+    var ac = getAudio(); if (!ac) return;
+    var buf = ac.createBuffer(1, Math.max(1, Math.floor(ac.sampleRate * dur)), ac.sampleRate);
+    var d = buf.getChannelData(0);
+    for (var i = 0; i < d.length; i++) d[i] = (Math.random()*2-1) * Math.pow(1 - i/d.length, 1.5);
+    var src = ac.createBufferSource(); src.buffer = buf;
+    var f = ac.createBiquadFilter(); f.type = "lowpass"; f.frequency.value = cut || 900;
+    var g = ac.createGain(); g.gain.value = vol || 0.1;
+    src.connect(f); f.connect(g); g.connect(ac.destination); src.start();
+  }
+  function sndJump()  { tone(500, 850, 0.09, "square", 0.09); }
+  function sndLand()  { noise(0.06, 700, 0.09); }
+  function sndCheck() { [700,1000,1400].forEach(function (f,i){ tone(f, f*1.2, 0.1, "triangle", 0.14, i*0.08); }); }
+  function sndBurn()  { noise(0.4, 500, 0.3); tone(150, 60, 0.4, "sawtooth", 0.22); }
+  function sndWin()   { [600,800,1000,1300,1660].forEach(function (f,i){ tone(f, f*1.25, 0.16, "triangle", 0.16, i*0.12); }); }
+  function sndBounce(){ tone(400, 900, 0.12, "sine", 0.14); }
+
+  function rand(a, b) { return Math.random() * (b - a) + a; }
+  function clamp(v, a, b) { return v < a ? a : (v > b ? b : v); }
+  function hash(n) { var s = Math.sin(n * 12.9898) * 43758.5453; return s - Math.floor(s); }
+
+  /* ======================= ЭТАПЫ ======================= */
+  function buildStage(n) {
+    blocks = []; lava = []; moving = []; spinning = []; checkpoints = []; particles = [];
+    stage = n;
+    // стартовая площадка
+    addBlock(0, 0, 0, 10, 1, 10, "#5a7a9a");
+    spawn = { x: 0, y: 2, z: 0 };
+    var z = 10;
+    var diff = (n - 1) / (STAGES - 1);   // 0..1 сложность
+
+    if (n <= 2) {
+      // простые платформы с щелями
+      for (var i = 0; i < 6; i++) {
+        z += rand(7, 9) + diff * 3;
+        var px = rand(-4, 4), pw = rand(4, 6) - diff * 1.5;
+        addBlock(px, rand(-0.5, 1.5), z, Math.max(2.5, pw), 1, Math.max(2.5, pw), "#5a7a9a");
+      }
+    } else if (n <= 4) {
+      // + движущиеся платформы
+      for (var i2 = 0; i2 < 5; i2++) {
+        z += rand(8, 10);
+        addBlock(rand(-4, 4), rand(-0.5, 1.5), z, 4, 1, 4, "#5a7a9a");
+      }
+      z += 10;
+      moving.push({ x: -6, y: 1, z: z, w: 6, h: 1, d: 6, axis: "x", range: 7, speed: 0.8, t: 0 });
+      z += 12;
+      moving.push({ x: 6, y: 2, z: z, w: 6, h: 1, d: 6, axis: "y", range: 3, speed: 1, t: 0 });
+    } else if (n <= 6) {
+      // + лава и вращающиеся балки
+      for (var i3 = 0; i3 < 5; i3++) {
+        z += rand(8, 11);
+        addBlock(rand(-5, 5), rand(-0.5, 2), z, 4, 1, 4, "#5a7a9a");
+      }
+      // лава-полоса
+      z += 10;
+      lava.push({ x: 0, y: -3, z: z + 6, w: 26, h: 8, d: 16 });
+      // платформы над лавой
+      addBlock(-6, 1, z + 2, 5, 1, 5, "#7a9aba");
+      addBlock(0, 2, z + 8, 5, 1, 5, "#7a9aba");
+      addBlock(6, 1, z + 14, 5, 1, 5, "#7a9aba");
+      z += 20;
+      spinning.push({ x: 0, y: 1.5, z: z, len: 14, speed: 1.2, t: 0 });
+      z += 12;
+    } else {
+      // максимум сложности: всё вместе
+      for (var i4 = 0; i4 < 4; i4++) {
+        z += rand(8, 12);
+        addBlock(rand(-6, 6), rand(-1, 2.5), z, 3, 1, 3, "#5a7a9a");
+      }
+      z += 8;
+      moving.push({ x: -7, y: 1, z: z, w: 5, h: 1, d: 5, axis: "x", range: 8, speed: 1, t: 0 });
+      z += 13;
+      spinning.push({ x: 0, y: 1.5, z: z, len: 16, speed: 1.5, t: 0 });
+      z += 12;
+      lava.push({ x: 0, y: -3, z: z + 6, w: 30, h: 8, d: 18 });
+      addBlock(-7, 2, z + 2, 4, 1, 4, "#7a9aba");
+      addBlock(0, 3, z + 8, 4, 1, 4, "#7a9aba");
+      addBlock(7, 2, z + 14, 4, 1, 4, "#7a9aba");
+      z += 20;
+      moving.push({ x: 0, y: 2, z: z, w: 6, h: 1, d: 6, axis: "z", range: 8, speed: 0.9, t: 0 });
+      z += 12;
+    }
+
+    // финиш
+    z += 6;
+    addBlock(0, 1, z, 12, 1, 12, "#7fff9a");
+    goalPos = { x: 0, y: 1, z: z };
+
+    // чекпоинты каждые ~пол пути
+    var platforms = blocks.filter(function (b) { return b.solid; });
+    for (var c = 0; c < platforms.length; c += 4) {
+      checkpoints.push({ x: platforms[c].x, y: platforms[c].y + 1, z: platforms[c].z });
+    }
+    checkpoints.push({ x: spawn.x, y: spawn.y, z: spawn.z });
+  }
+
+  function addBlock(x, y, z, w, h, d, col, solid) {
+    blocks.push({ x: x, y: y, z: z, w: w, h: h, d: d, col: col || "#5a7a9a", solid: solid !== false, top: y + h/2 });
+  }
+
+  function resetPlayer() {
+    player.x = spawn.x; player.y = spawn.y + 3; player.z = spawn.z + 0;
+    player.vx = 0; player.vy = 0; player.vz = 0;
+    player.onGround = false; player.jumps = 0;
+    cam.x = player.x; cam.y = player.y + EYE; cam.z = player.z;
+  }
+
+  /* ======================= ПРОЕКЦИЯ ======================= */
+  function proj(x, y, z) {
+    var dx = x - cam.x, dy = y - cam.y, dz = z - cam.z;
+    var cy = Math.cos(cam.yaw), sy = Math.sin(cam.yaw);
+    var x1 = dx * cy - dz * sy;
+    var z1 = dx * sy + dz * cy;
+    var cp = Math.cos(cam.pitch), sp = Math.sin(cam.pitch);
+    var y2 = dy * cp + z1 * sp;
+    var z2 = -dy * sp + z1 * cp;
+    if (z2 < 0.4) return null;
+    var s = FOCAL / z2;
+    return { x: W/2 + x1 * s, y: H/2 - y2 * s, s: s, z: z2 };
+  }
+  function horizonY() { return H/2 - FOCAL * Math.tan(cam.pitch); }
+
+  function shade(hex, f) {
+    var r = parseInt(hex.slice(1,3),16), g = parseInt(hex.slice(3,5),16), b = parseInt(hex.slice(5,7),16);
+    r = Math.min(255, Math.round(r*f)); g = Math.min(255, Math.round(g*f)); b = Math.min(255, Math.round(b*f));
+    return "rgb(" + r + "," + g + "," + b + ")";
+  }
+  function fade(z) { return clamp(1 - (z - 40) / 500, 0.06, 1); }
+
+  /* ======================= ФИЗИКА ======================= */
+  function update(dt) {
+    timeNow += dt;
+    var p = player;
+
+    if (shakeT > 0) shakeT -= dt;
+
+    // таймер этапа
+    timeLeft -= dt;
+    if (timeLeft <= 0) { timeLeft = 0; die("Время вышло!"); return; }
+
+    // ввод
+    var mvF = 0, mvR = 0;
+    if (keys.w) mvF += 1;
+    if (keys.s) mvF -= 1;
+    if (keys.d) mvR += 1;
+    if (keys.a) mvR -= 1;
+    if (joyActive) { mvF += -joyDY; mvR += joyDX; }
+    var len = Math.hypot(mvF, mvR);
+    if (len > 1) { mvF /= len; mvR /= len; }
+
+    var fx = Math.sin(cam.yaw), fz = Math.cos(cam.yaw);
+    var rx = Math.cos(cam.yaw), rz = -Math.sin(cam.yaw);
+    var wishX = fx * mvF + rx * mvR;
+    var wishZ = fz * mvF + rz * mvR;
+    var wl = Math.hypot(wishX, wishZ);
+    if (wl > 0.05) { wishX /= wl; wishZ /= wl; }
+
+    var ctrl = p.onGround ? 1 : AIR_CTRL;
+    p.vx += wishX * MOVE_ACCEL * ctrl * dt;
+    p.vz += wishZ * MOVE_ACCEL * ctrl * dt;
+    // трение
+    var sp = Math.hypot(p.vx, p.vz);
+    if (sp > 0) {
+      var fr = (p.onGround ? FRICTION : 1.2) * dt;
+      if (fr >= sp) { p.vx = 0; p.vz = 0; }
+      else { p.vx -= p.vx/sp*fr; p.vz -= p.vz/sp*fr; }
+    }
+    sp = Math.hypot(p.vx, p.vz);
+    if (sp > MAX_SPEED) { p.vx = p.vx/sp*MAX_SPEED; p.vz = p.vz/sp*MAX_SPEED; }
+
+    // гравитация
+    p.vy -= GRAVITY * dt;
+
+    // интегрирование
+    p.x += p.vx * dt;
+    p.y += p.vy * dt;
+    p.z += p.vz * dt;
+
+    // коллизии с блоками (AABB сверху)
+    p.onGround = false;
+    var solids = blocks.concat(moving);
+    for (var i = 0; i < solids.length; i++) {
+      var b = solids[i];
+      var bx1 = b.x - b.w/2, bx2 = b.x + b.w/2;
+      var by1 = b.y - b.h/2, by2 = b.y + b.h/2;
+      var bz1 = b.z - b.d/2, bz2 = b.z + b.d/2;
+      // горизонтальный оверлап
+      if (p.x + RADIUS > bx1 && p.x - RADIUS < bx2 &&
+          p.z + RADIUS > bz1 && p.z - RADIUS < bz2) {
+        // сверху
+        if (p.y - 1.7 <= by2 && p.y - 1.7 >= by2 - Math.abs(p.vy*dt) - 1.2 && p.vy <= 0) {
+          p.y = by2 + 1.7;
+          p.vy = 0; p.onGround = true; p.jumps = 0;
+        } else if (p.y + 0.3 > by1 && p.y - 1.7 < by1) {
+          // снизу бьётся
+          if (p.vy > 0) { p.y = by1 - 0.3; p.vy = 0; }
+        }
+      }
+    }
+
+    // вращающиеся балки — отбрасывают
+    for (var s = 0; s < spinning.length; s++) {
+      var spb = spinning[s];
+      spb.t += dt * spb.speed;
+      var ang = spb.t;
+      // балка идёт от центра в обе стороны по X, вращается в плоскости XZ
+      var tipX = spb.x + Math.cos(ang) * spb.len/2;
+      var tipZ = spb.z + Math.sin(ang) * spb.len/2;
+      var tipX2 = spb.x - Math.cos(ang) * spb.len/2;
+      var tipZ2 = spb.z - Math.sin(ang) * spb.len/2;
+      // расстояние от игрока до отрезка
+      var d1 = distToSeg(p.x, p.z, spb.x, spb.z, tipX, tipZ);
+      var d2 = distToSeg(p.x, p.z, spb.x, spb.z, tipX2, tipZ2);
+      if (Math.min(d1, d2) < RADIUS + 0.5 && Math.abs(p.y - spb.y) < 1.5) {
+        // отбрасывает!
+        var dirx = p.x - spb.x, dirz = p.z - spb.z;
+        var dl = Math.hypot(dirx, dirz) || 1;
+        p.vx += dirx/dl * 18;
+        p.vz += dirz/dl * 18;
+        p.vy = Math.max(p.vy, 8);
+        sndBounce();
+        shakeT = 0.2; shakeMag = 6;
+      }
+    }
+
+    // движущиеся платформы (несут игрока)
+    for (var m = 0; m < moving.length; m++) {
+      var mv = moving[m];
+      mv.t += dt * mv.speed;
+      var off = Math.sin(mv.t) * mv.range;
+      var oldX = mv.x, oldY = mv.y, oldZ = mv.z;
+      if (mv.baseX === undefined) { mv.baseX = mv.x; mv.baseY = mv.y; mv.baseZ = mv.z; }
+      if (mv.axis === "x") mv.x = mv.baseX + off;
+      else if (mv.axis === "y") mv.y = mv.baseY + off;
+      else if (mv.axis === "z") mv.z = mv.baseZ + off;
+      // если игрок стоял на платформе — везём
+      if (p.onGround &&
+          p.x + RADIUS > mv.x - mv.w/2 && p.x - RADIUS < mv.x + mv.w/2 &&
+          p.z + RADIUS > mv.z - mv.d/2 && p.z - RADIUS < mv.z + mv.d/2 &&
+          Math.abs((p.y - 1.7) - (mv.y + mv.h/2)) < 0.6) {
+        p.x += mv.x - oldX;
+        p.y += mv.y - oldY;
+        p.z += mv.z - oldZ;
+      }
+    }
+
+    // лава — урон
+    for (var l = 0; l < lava.length; l++) {
+      var lv = lava[l];
+      if (Math.abs(p.x - lv.x) < lv.w/2 && Math.abs(p.z - lv.z) < lv.d/2 && p.y < lv.y + lv.h) {
+        die("Сгорел в лаве!"); return;
+      }
+    }
+
+    // упал
+    if (p.y < FALL_Y) { die("Упал!"); return; }
+
+    // финиш
+    if (Math.abs(p.x - goalPos.x) < 6 && Math.abs(p.z - goalPos.z) < 6 && player.y < 4) {
+      winStage(); return;
+    }
+
+    // чекпоинты
+    for (var c = 0; c < checkpoints.length; c++) {
+      var cp = checkpoints[c];
+      if (Math.hypot(p.x - cp.x, p.z - cp.z) < 2.5 && Math.abs(p.y - cp.y) < 3) {
+        if (!cp.reached) {
+          cp.reached = true;
+          spawn = { x: cp.x, y: cp.y + 0.5, z: cp.z };
+          sndCheck();
+          toast("✅ Чекпоинт!");
+          cpEl.textContent = "этап " + stage;
+        }
+      }
+    }
+
+    player.walk += dt * Math.hypot(p.vx, p.vz) * 2;
+
+    // камера — от первого лица
+    cam.x = p.x; cam.z = p.z;
+    cam.y = p.y + EYE;
+    cam.pitch = CAM_PITCH + mousePitch;
+
+    // частицы
+    for (var f = particles.length - 1; f >= 0; f--) {
+      var pt = particles[f];
+      pt.x += pt.vx*dt; pt.y += pt.vy*dt; pt.z += pt.vz*dt;
+      pt.vy -= 20*dt; pt.life -= dt;
+      if (pt.life <= 0) particles.splice(f, 1);
+    }
+
+    updateHUD();
+  }
+
+  function distToSeg(px, pz, ax, az, bx, bz) {
+    var dx = bx - ax, dz = bz - az;
+    var l2 = dx*dx + dz*dz;
+    if (l2 === 0) return Math.hypot(px - ax, pz - az);
+    var t = clamp(((px - ax)*dx + (pz - az)*dz) / l2, 0, 1);
+    return Math.hypot(px - (ax + t*dx), pz - (az + t*dz));
+  }
+
+  var joyActive = false, joyId = null, joyCX = 0, joyCY = 0, joyDX = 0, joyDY = 0;
+
+  function die(reason) {
+    deaths++;
+    sndBurn();
+    shakeT = 0.5; shakeMag = 16;
+    dmgEl.classList.remove("on"); void dmgEl.offsetWidth; dmgEl.classList.add("on");
+    toast("💥 " + reason);
+    resetPlayer();
+    timeLeft = Math.max(8, timeLeft - 4);   // штраф времени
+    updateHUD();
+  }
+
+  function winStage() {
+    running = false;
+    sndWin();
+    var st = stage;
+    if (stage >= STAGES) {
+      gameMode = "restart";
+      overlay.classList.remove("hidden");
+      overlay.innerHTML =
+        '<div class="card">' +
+          '<h1>🏆 ТЫ ПРОШЁЛ ВСЕ ЭТАПЫ!</h1>' +
+          '<p>Ты настоящий паркурщик! Все ' + STAGES + ' этапов пройдены.</p>' +
+          '<div class="big">' + STAGES + '/' + STAGES + '</div>' +
+          '<div class="row">' +
+            '<div class="col">Попытки<b>' + deaths + '</b></div>' +
+          '</div>' +
+          '<button id="startBtn">Играть снова! 🔥</button>' +
+        '</div>';
+      return;
+    }
+    gameMode = "nextStage";
+    overlay.classList.remove("hidden");
+    overlay.innerHTML =
+      '<div class="card">' +
+        '<h1>✅ Этап ' + st + ' пройден!</h1>' +
+        '<p>Впереди ещё ' + (STAGES - st) + ' этапов. Готов?</p>' +
+        '<div class="row">' +
+          '<div class="col">Попытки<b>' + deaths + '</b></div>' +
+          '<div class="col">Следующий<b>' + (st + 1) + '/' + STAGES + '</b></div>' +
+        '</div>' +
+        '<button id="startBtn">Следующий этап →</button>' +
+      '</div>';
+  }
+
+  /* ======================= ОТРИСОВКА ======================= */
+  function render() {
+    var sx = 0, sy = 0;
+    if (shakeT > 0) { sx = rand(-shakeMag, shakeMag); sy = rand(-shakeMag, shakeMag); }
+
+    drawSky();
+    ctx.save();
+    ctx.translate(sx, sy);
+
+    // сортируем по глубине
+    var items = [];
+    for (var i = 0; i < blocks.length; i++) {
+      var b = blocks[i];
+      items.push({ o: b, d: (b.x-cam.x)*(b.x-cam.x) + (b.z-cam.z)*(b.z-cam.z) });
+    }
+    for (var m = 0; m < moving.length; m++) {
+      var mv = moving[m];
+      items.push({ o: mv, d: (mv.x-cam.x)*(mv.x-cam.x) + (mv.z-cam.z)*(mv.z-cam.z), moving: true });
+    }
+    items.sort(function (a, c) { return c.d - a.d; });
+
+    for (var k = 0; k < items.length; k++) {
+      if (items[k].d > 600*600) continue;
+      drawBlock(items[k].o, items[k].moving);
+    }
+
+    // вращающиеся балки
+    for (var s = 0; s < spinning.length; s++) drawSpinning(spinning[s]);
+
+    // лава
+    for (var l = 0; l < lava.length; l++) drawLava(lava[l]);
+
+    // финиш
+    drawGoal();
+
+    // частицы
+    for (var f = 0; f < particles.length; f++) {
+      var pt = particles[f];
+      var pj = proj(pt.x, pt.y, pt.z);
+      if (!pj) continue;
+      ctx.globalAlpha = clamp(pt.life/pt.max, 0, 1);
+      ctx.fillStyle = pt.color;
+      ctx.beginPath(); ctx.arc(pj.x, pj.y, Math.max(1, pt.r*pj.s), 0, Math.PI*2); ctx.fill();
+    }
+    ctx.globalAlpha = 1;
+
+    ctx.restore();
+    drawGoalArrow();
+  }
+
+  function drawSky() {
+    var hy = horizonY();
+    var g = ctx.createLinearGradient(0, 0, 0, Math.max(hy, H*0.6));
+    if (stage >= 5) {
+      // лавовые этапы — оранжево-красное небо
+      g.addColorStop(0, "#2a0800");
+      g.addColorStop(0.4, "#6a1a00");
+      g.addColorStop(0.75, "#c04000");
+      g.addColorStop(1, "#ffcf80");
+    } else {
+      g.addColorStop(0, "#0a1030");
+      g.addColorStop(0.5, "#3a4a90");
+      g.addColorStop(0.85, "#7fa0d8");
+      g.addColorStop(1, "#cfe0f5");
+    }
+    ctx.fillStyle = g;
+    ctx.fillRect(0, 0, W, Math.max(hy, H*0.6));
+  }
+
+  function drawBlock(b, isMoving) {
+    var x0 = b.x - b.w/2, x1 = b.x + b.w/2;
+    var z0 = b.z - b.d/2, z1 = b.z + b.d/2;
+    var y0 = b.y - b.h/2, y1 = b.y + b.h/2;
+    var faces = [];
+    function add(pts, sh) {
+      var ps = [], depth = 0;
+      for (var i = 0; i < pts.length; i++) {
+        var p = proj(pts[i][0], pts[i][1], pts[i][2]);
+        if (!p) return;
+        ps.push(p); depth += p.z;
+      }
+      faces.push({ pts: ps, sh: sh, depth: depth/pts.length });
+    }
+    // верхняя грань
+    if (cam.y > y1) add([[x0,y1,z0],[x1,y1,z0],[x1,y1,z1],[x0,y1,z1]], 1.2);
+    // боковые
+    if (cam.z < z0) add([[x0,y0,z0],[x1,y0,z0],[x1,y1,z0],[x0,y1,z0]], 0.85);
+    else if (cam.z > z1) add([[x0,y0,z1],[x1,y0,z1],[x1,y1,z1],[x0,y1,z1]], 0.65);
+    if (cam.x < x0) add([[x0,y0,z0],[x0,y0,z1],[x0,y1,z1],[x0,y1,z0]], 0.78);
+    else if (cam.x > x1) add([[x1,y0,z0],[x1,y0,z1],[x1,y1,z1],[x1,y1,z0]], 0.6);
+    faces.sort(function (a, c) { return c.depth - a.depth; });
+    var col = b.col;
+    if (isMoving) col = "#c98a3a";
+    for (var f = 0; f < faces.length; f++) {
+      var al = fade(faces[f].depth);
+      ctx.globalAlpha = al;
+      ctx.fillStyle = shade(col, faces[f].sh);
+      ctx.beginPath();
+      ctx.moveTo(faces[f].pts[0].x, faces[f].pts[0].y);
+      for (var i = 1; i < faces[f].pts.length; i++) ctx.lineTo(faces[f].pts[i].x, faces[f].pts[i].y);
+      ctx.closePath(); ctx.fill();
+      ctx.strokeStyle = "rgba(0,0,0,.25)"; ctx.lineWidth = 1; ctx.stroke();
+    }
+    ctx.globalAlpha = 1;
+  }
+
+  function drawSpinning(spb) {
+    var ang = spb.t;
+    var tipX = spb.x + Math.cos(ang) * spb.len/2;
+    var tipZ = spb.z + Math.sin(ang) * spb.len/2;
+    var tipX2 = spb.x - Math.cos(ang) * spb.len/2;
+    var tipZ2 = spb.z - Math.sin(ang) * spb.len/2;
+    var a = proj(tipX, spb.y, tipZ);
+    var b = proj(tipX2, spb.y, tipZ2);
+    if (!a || !b) return;
+    ctx.save();
+    ctx.globalAlpha = fade((a.z + b.z)/2);
+    ctx.strokeStyle = "#ff8a3a";
+    ctx.lineWidth = Math.max(4, 0.6 * a.s);
+    ctx.lineCap = "round";
+    ctx.beginPath(); ctx.moveTo(a.x, a.y); ctx.lineTo(b.x, b.y); ctx.stroke();
+    ctx.strokeStyle = "#ffd76e";
+    ctx.lineWidth = Math.max(2, 0.25 * a.s);
+    ctx.beginPath(); ctx.moveTo(a.x, a.y); ctx.lineTo(b.x, b.y); ctx.stroke();
+    // центральный столб
+    var c0 = proj(spb.x, spb.y - 3, spb.z);
+    var c1 = proj(spb.x, spb.y, spb.z);
+    if (c0 && c1) {
+      ctx.strokeStyle = "#8a5a2a"; ctx.lineWidth = Math.max(3, 0.4*a.s);
+      ctx.beginPath(); ctx.moveTo(c0.x, c0.y); ctx.lineTo(c1.x, c1.y); ctx.stroke();
+    }
+    ctx.restore();
+  }
+
+  function drawLava(lv) {
+    var x0 = lv.x - lv.w/2, x1 = lv.x + lv.w/2;
+    var z0 = lv.z - lv.d/2, z1 = lv.z + lv.d/2;
+    var y = lv.y + lv.h/2;
+    var pts = [
+      proj(x0, y, z0), proj(x1, y, z0), proj(x1, y, z1), proj(x0, y, z1)
+    ];
+    if (pts.indexOf(null) >= 0) return;
+    var glow = 0.7 + 0.3 * Math.sin(timeNow * 3);
+    var g = ctx.createLinearGradient(pts[0].x, pts[0].y, pts[2].x, pts[2].y);
+    g.addColorStop(0, "rgba(255,120,20," + glow + ")");
+    g.addColorStop(1, "rgba(255,60,0," + glow + ")");
+    ctx.fillStyle = g;
+    ctx.beginPath();
+    ctx.moveTo(pts[0].x, pts[0].y);
+    for (var i = 1; i < 4; i++) ctx.lineTo(pts[i].x, pts[i].y);
+    ctx.closePath(); ctx.fill();
+    // пузыри
+    ctx.fillStyle = "rgba(255,220,120,.7)";
+    for (var b = 0; b < 8; b++) {
+      var bx = x0 + hash(b*3 + Math.floor(timeNow*2)) * lv.w;
+      var bz = z0 + hash(b*7 + Math.floor(timeNow*2)) * lv.d;
+      var bp = proj(bx, y + 0.2, bz);
+      if (bp) { ctx.beginPath(); ctx.arc(bp.x, bp.y, bp.s*0.3, 0, Math.PI*2); ctx.fill(); }
+    }
+  }
+
+  function drawGoal() {
+    var p = proj(goalPos.x, goalPos.y + 3, goalPos.z);
+    if (!p) return;
+    var g = ctx.createRadialGradient(p.x, p.y, 2, p.x, p.y, 5*p.s);
+    g.addColorStop(0, "rgba(140,255,160,.8)");
+    g.addColorStop(1, "rgba(140,255,160,0)");
+    ctx.fillStyle = g;
+    ctx.beginPath(); ctx.arc(p.x, p.y, 5*p.s, 0, Math.PI*2); ctx.fill();
+    // флаг
+    ctx.fillStyle = "#8dffb4";
+    ctx.font = Math.round(3*p.s) + "px sans-serif";
+    ctx.textAlign = "center";
+    ctx.fillText("🏁", p.x, p.y);
+  }
+
+  function drawGoalArrow() {
+    if (!running) { goalEl.style.opacity = "0"; return; }
+    var ang = Math.atan2(goalPos.x - player.x, goalPos.z - player.z) - cam.yaw;
+    var p = proj(goalPos.x, goalPos.y + 2, goalPos.z);
+    // если цель на экране — показываем метку над ней
+    if (p && p.z < 200 && p.x > 50 && p.x < W-50 && p.y > 50 && p.y < H-50) {
+      goalEl.style.opacity = "1";
+      goalEl.style.left = (p.x - 13) + "px";
+      goalEl.style.top = (p.y - 40) + "px";
+      goalEl.textContent = "🏁 ЦЕЛЬ";
+      goalEl.style.transform = "none";
+    } else {
+      var radius = Math.min(W, H) * 0.33;
+      var cx = W/2 + Math.sin(ang) * radius;
+      var cy = H/2 - Math.cos(ang) * radius * 0.6;
+      goalEl.style.opacity = "0.9";
+      goalEl.style.left = (cx - 13) + "px";
+      goalEl.style.top = (cy - 13) + "px";
+      goalEl.textContent = "🏁";
+      goalEl.style.transform = "rotate(" + (ang*180/Math.PI) + "deg)";
+    }
+  }
+
+  /* ======================= HUD ======================= */
+  function updateHUD() {
+    stageEl.textContent = stage + "/" + STAGES;
+    deathsEl.textContent = deaths;
+    timeEl.textContent = fmtTime(timeLeft);
+    bossFill.style.width = clamp(timeLeft / STAGE_TIME * 100, 0, 100) + "%";
+    if (timeLeft > STAGE_TIME*0.5) bossTxt.textContent = "⏱️ время: " + Math.ceil(timeLeft) + " сек";
+    else if (timeLeft > STAGE_TIME*0.25) { bossTxt.textContent = "⏱️ ТОРОПИСЬ! " + Math.ceil(timeLeft) + " сек"; bossTxt.style.color = "#ffd76e"; }
+    else { bossTxt.textContent = "🔥 БЫСТРЕЕ! " + Math.ceil(timeLeft) + " сек"; bossTxt.style.color = "#ff5a5a"; }
+  }
+  function fmtTime(s) { var m = Math.floor(s/60), ss = Math.floor(s%60); return m + ":" + (ss<10?"0":"") + ss; }
+  var toastT = 0;
+  function toast(t) { toastEl.textContent = t; toastEl.classList.add("on"); toastT = 1.6; }
+
+  /* ======================= ВВОД ======================= */
+  function jump() {
+    if (!running) return;
+    if (player.onGround) { player.vy = JUMP_VEL; player.onGround = false; player.jumps = 1; sndJump(); }
+    else if (player.jumps < 2) { player.vy = JUMP_VEL * 0.85; player.jumps = 2; sndJump(); }
+  }
+
+  window.addEventListener("keydown", function (e) {
+    var k = e.key.toLowerCase();
+    if (k === "w" || k === "arrowup" || k === "ц") keys.w = true;
+    if (k === "s" || k === "arrowdown" || k === "ы") keys.s = true;
+    if (k === "a" || k === "arrowleft" || k === "ф") keys.a = true;
+    if (k === "d" || k === "arrowright" || k === "в") keys.d = true;
+    if (k === " ") { e.preventDefault(); if (running) jump(); }
+    if (k === "r" && running) die("Рестарт");
+    if (!running && (e.key === " " || e.key === "Enter")) { e.preventDefault(); startStage(1); }
+  });
+  window.addEventListener("keyup", function (e) {
+    var k = e.key.toLowerCase();
+    if (k === "w" || k === "arrowup" || k === "ц") keys.w = false;
+    if (k === "s" || k === "arrowdown" || k === "ы") keys.s = false;
+    if (k === "a" || k === "arrowleft" || k === "ф") keys.a = false;
+    if (k === "d" || k === "arrowright" || k === "в") keys.d = false;
+  });
+
+  var dragging = false, lastMX = 0, lastMY = 0;
+  canvas.addEventListener("mousedown", function (e) { dragging = true; lastMX = e.clientX; lastMY = e.clientY; });
+  window.addEventListener("mouseup", function () { dragging = false; });
+  window.addEventListener("mousemove", function (e) {
+    if (!dragging || !running) return;
+    cam.yaw -= (e.clientX - lastMX) * 0.006;
+    mousePitch = clamp(mousePitch - (e.clientY - lastMY) * 0.004, -0.35, 0.5);
+    lastMX = e.clientX; lastMY = e.clientY;
+  });
+  canvas.addEventListener("contextmenu", function (e) { e.preventDefault(); });
+
+  var joyEl = document.getElementById("joy");
+  var joyKnob = document.getElementById("joyKnob");
+  joyEl.addEventListener("touchstart", function (e) {
+    e.preventDefault();
+    var t = e.changedTouches[0];
+    joyActive = true; joyId = t.identifier;
+    var r = joyEl.getBoundingClientRect();
+    joyCX = r.left + r.width/2; joyCY = r.top + r.height/2;
+    updateJoy(t.clientX, t.clientY);
+  }, { passive: false });
+  function updateJoy(x, y) {
+    var dx = x - joyCX, dy = y - joyCY, max = 54, l = Math.hypot(dx, dy);
+    if (l > max) { dx = dx/l*max; dy = dy/l*max; }
+    joyKnob.style.transform = "translate(" + dx + "px," + dy + "px)";
+    joyDX = dx/max; joyDY = dy/max;
+  }
+  window.addEventListener("touchmove", function (e) {
+    for (var i = 0; i < e.changedTouches.length; i++) {
+      var t = e.changedTouches[i];
+      if (t.identifier === joyId) { e.preventDefault(); updateJoy(t.clientX, t.clientY); return; }
+    }
+  }, { passive: false });
+  window.addEventListener("touchend", function (e) {
+    for (var i = 0; i < e.changedTouches.length; i++) {
+      if (e.changedTouches[i].identifier === joyId) {
+        joyActive = false; joyId = null; joyDX = 0; joyDY = 0;
+        joyKnob.style.transform = "translate(0,0)";
+      }
+    }
+  });
+
+  var lookZone = document.getElementById("lookZone");
+  var lookId = null, lookLastX = 0, lookLastY = 0;
+  lookZone.addEventListener("touchstart", function (e) {
+    e.preventDefault();
+    var t = e.changedTouches[0]; lookId = t.identifier; lookLastX = t.clientX; lookLastY = t.clientY;
+  }, { passive: false });
+  lookZone.addEventListener("touchmove", function (e) {
+    for (var i = 0; i < e.changedTouches.length; i++) {
+      var t = e.changedTouches[i];
+      if (t.identifier !== lookId) continue;
+      e.preventDefault();
+      cam.yaw -= (t.clientX - lookLastX) * 0.008;
+      mousePitch = clamp(mousePitch - (t.clientY - lookLastY) * 0.005, -0.35, 0.5);
+      lookLastX = t.clientX; lookLastY = t.clientY;
+    }
+  }, { passive: false });
+
+  function bindBtn(id, down) {
+    var el = document.getElementById(id);
+    el.addEventListener("touchstart", function (e) { e.preventDefault(); el.classList.add("press"); down(); }, { passive: false });
+    el.addEventListener("touchend", function (e) { e.preventDefault(); el.classList.remove("press"); }, { passive: false });
+    el.addEventListener("mousedown", function (e) { if (isMobile) return; e.preventDefault(); down(); });
+  }
+  bindBtn("btnJump", function () { jump(); });
+
+  /* ======================= ЭКРАНЫ ======================= */
+  function showStart() {
+    gameMode = "start";
+    overlay.classList.remove("hidden");
+    var keysHtml = isMobile
+      ? '<div class="keys">' +
+          '<div><span class="key">🕹️</span> джойстик — бежать</div>' +
+          '<div><span class="key">👆</span> свайп справа — смотреть</div>' +
+          '<div><span class="key">⤒</span> кнопка — прыжок (двойной!)</div>' +
+        '</div>'
+      : '<div class="keys">' +
+          '<div><span class="key">W A S D</span> — бежать</div>' +
+          '<div><span class="key">Мышь</span> — смотреть</div>' +
+          '<div><span class="key">ПРОБЕЛ</span> — прыжок (дважды — двойной)</div>' +
+          '<div><span class="key">R</span> — рестарт чекпоинта</div>' +
+        '</div>';
+    overlay.innerHTML =
+      '<div class="card">' +
+        '<h1>🔥 ПАРКУР-ПОЛОСА 3D</h1>' +
+        '<p>Пройди <b>8 этапов</b> полосы препятствий! Прыгай по платформам, беги от движущихся блоков, ' +
+        'проскакивай вращающиеся балки и не упади в <b>лаву</b> 🔥</p>' +
+        '<p style="font-size:13px;opacity:.85">⏱️ На каждом этапе есть время — успей к 🏁 финишу!<br>' +
+        '✅ Собирай чекпоинты, чтобы после падения вернуться ближе.</p>' +
+        keysHtml +
+        '<div class="legend">' +
+          '<span>🟫 движущиеся платформы</span>' +
+          '<span>🔴 вращающиеся балки</span>' +
+          '<span>🔥 лава</span>' +
+        '</div>' +
+        '<button id="startBtn">НАЧАТЬ! 🔥</button>' +
+      '</div>';
+  }
+
+  function winGame() {
+    running = false; won = true;
+    var best = loadBest();
+    if (best === 0 || deaths < best) { best = deaths; try { localStorage.setItem("obb3d_best", String(best)); } catch (e) {} }
+    bestEl.textContent = best + " поп.";
+    overlay.classList.remove("hidden");
+    overlay.innerHTML =
+      '<div class="card">' +
+        '<h1>🏆 ВСЕ ЭТАПЫ ПРОЙДЕНЫ!</h1>' +
+        '<p>Ты прошёл всю паркур-полосу! Настоящий мастер.</p>' +
+        '<div class="big">' + STAGES + '/' + STAGES + '</div>' +
+        '<div class="row">' +
+          '<div class="col">Попытки<b>' + deaths + '</b></div>' +
+        '</div>' +
+        '<button id="startBtn">Ещё раз! 🔥</button>' +
+      '</div>';
+  }
+
+  function startStage(n) {
+    getAudio();
+    buildStage(n);
+    resetPlayer();
+    timeLeft = STAGE_TIME;
+    running = true; won = false;
+    cpEl.textContent = "старт";
+    overlay.classList.add("hidden");
+    toast("Этап " + n + " — вперёд!");
+    lastTs = 0;
+    if (!rafId) rafId = requestAnimationFrame(frame);
+    updateHUD();
+  }
+
+  overlay.addEventListener("click", function (e) {
+    var btn = e.target.closest && e.target.closest("button");
+    if (!btn) return;
+    gameOverButton();
+  });
+  overlay.addEventListener("touchend", function (e) {
+    var btn = e.target.closest && e.target.closest("button");
+    if (!btn) return;
+    e.preventDefault();
+    gameOverButton();
+  });
+
+  var gameMode = "start";   // "start" | "nextStage" | "nextStageOrRestart" | "restart"
+  function gameOverButton() {
+    if (gameMode === "restart") startStage(1);
+    else if (gameMode === "nextStageOrRestart") startStage(stage >= STAGES ? 1 : stage + 1);
+    else if (gameMode === "nextStage") startStage(stage + 1);
+    else startStage(1);
+  }
+
+  function frame(ts) {
+    var dt = lastTs ? Math.min((ts - lastTs)/1000, 0.033) : 0.016;
+    lastTs = ts;
+    if (running) {
+      var steps = 2, h = dt/steps;
+      for (var i = 0; i < steps && running; i++) update(h);
+    }
+    if (toastT > 0) { toastT -= dt; if (toastT <= 0) toastEl.classList.remove("on"); }
+    render();
+    rafId = requestAnimationFrame(frame);
+  }
+
+  window.addEventListener("resize", resize);
+
+  resize();
+  buildStage(1);
+  resetPlayer();
+  updateHUD();
+  showStart();
+  if (!rafId) rafId = requestAnimationFrame(frame);
+})();
+</script>
+</body>
+</html>
