@@ -305,6 +305,42 @@
   function sndWin()    { [600,800,1000,1300,1600].forEach(function (f,i){ tone(f, f*1.25, 0.16, "triangle", 0.16, i*0.12); }); }
   function sndLose()   { tone(300, 60, 0.9, "sawtooth", 0.28); noise(0.8, 600, 0.25); }
 
+  /* ======================= ЗВУК СТРАХА ======================= */
+  // Сердцебиение — частый двойной удар; громкость зависит от близости монстра
+  function sndHeartbeat(intensity) {
+    var vol = 0.05 + intensity * 0.22;
+    tone(52 + intensity * 12, 34, 0.14, "sine", vol);
+    tone(48 + intensity * 12, 30, 0.13, "sine", vol * 0.75, 0.17);
+  }
+  // Тяжёлое дыхание монстра — шум с низким фильтром
+  function sndBreath(intensity) {
+    var ac = getAudio(); if (!ac) return;
+    var dur = 0.8;
+    var buf = ac.createBuffer(1, Math.floor(ac.sampleRate * dur), ac.sampleRate);
+    var d = buf.getChannelData(0);
+    for (var i = 0; i < d.length; i++) {
+      var env = Math.sin(i/d.length * Math.PI);
+      d[i] = (Math.random()*2-1) * env;
+    }
+    var src = ac.createBufferSource(); src.buffer = buf;
+    var f = ac.createBiquadFilter(); f.type = "bandpass"; f.frequency.value = 200; f.Q.value = 1.5;
+    var g = ac.createGain(); g.gain.value = 0.03 + intensity * 0.16;
+    src.connect(f); f.connect(g); g.connect(ac.destination); src.start();
+  }
+  // Шаги монстра — тяжёлые удары
+  function sndMonStep(intensity) {
+    tone(60, 32, 0.2, "sine", 0.06 + intensity * 0.2);
+    noise(0.12, 300, 0.05 + intensity * 0.14);
+  }
+  // Вопль при поймке
+  function sndScream() {
+    tone(900, 180, 0.5, "sawtooth", 0.24);
+    tone(1400, 300, 0.45, "square", 0.16, 0.03);
+    noise(0.5, 2500, 0.22);
+  }
+
+  var heartT = 0, breathT = 0, monStepT = 0;
+
   function rand(a, b) { return Math.random() * (b - a) + a; }
   function clamp(v, a, b) { return v < a ? a : (v > b ? b : v); }
   function hash(n) { var s = Math.sin(n * 12.9898) * 43758.5453; return s - Math.floor(s); }
@@ -1348,12 +1384,35 @@
     if (md > 0.1) { m.x += mdx/md * speed * dt; m.z += mdz/md * speed * dt; }
     m.anim += dt * (6 + speed * 0.3);
     if (m.lunge > 0) m.lunge -= dt;
+
+    // ===== ЗВУК СТРАХА (зависит от близости монстра) =====
+    var fear = clamp(1 - md / 55, 0, 1);         // 0 далеко → 1 вплотную
+
+    // сердцебиение — тем чаще и громче, чем ближе монстр
+    heartT -= dt;
+    if (heartT <= 0 && fear > 0.05) {
+      heartT = 1.1 - fear * 0.72;                // от 1.1с до 0.38с
+      sndHeartbeat(fear);
+    }
+    // тяжёлое дыхание монстра из тумана
+    breathT -= dt;
+    if (breathT <= 0 && md < 40) {
+      breathT = rand(1.2, 2.4) - fear * 0.6;
+      sndBreath(fear);
+    }
+    // тяжёлые шаги монстра
+    monStepT -= dt;
+    if (monStepT <= 0 && md < 45) {
+      monStepT = 0.55 - fear * 0.3;
+      sndMonStep(fear);
+    }
+    // рычание
     growlT -= dt;
-    if (growlT <= 0) { growlT = rand(1.6, 3.2); sndGrowl(); }
+    if (growlT <= 0) { growlT = rand(1.6, 3.2) - fear * 1; if (growlT < 0.5) growlT = 0.5; sndGrowl(); }
 
     if (md < CATCH && invuln <= 0) {
       hearts--; invuln = 2.2; catchT = 1.2;
-      sndHit(); shakeT = 0.6; shakeMag = 20;
+      sndHit(); sndScream(); shakeT = 0.6; shakeMag = 20;
       dmgEl.classList.remove("on"); void dmgEl.offsetWidth; dmgEl.classList.add("on");
       burst(p.x, p.z, "#ff3a3a", 26);
       m.x = p.x - mdx/md * 18; m.z = p.z - mdz/md * 18; m.lunge = 0;
