@@ -314,6 +314,22 @@
     if (solid !== false) solids.push({ x: x, z: z, w: w, d: d });
   }
 
+  /* ======================= ЗОНЫ ПАРКА ======================= */
+  /* 4 тематические зоны (как в Замании): у каждой свой цвет и декор */
+  var ZONES = [
+    { name: "🚀 Космос",       col: "#1a1030", col2: "#241848", x0: -PARK, x1: 0, z0: -PARK, z1: 0, theme: "space" },
+    { name: "🌿 Джунгли",      col: "#0e2010", col2: "#16301a", x0: 0, x1: PARK, z0: -PARK, z1: 0, theme: "jungle" },
+    { name: "🤖 Город роботов", col: "#101826", col2: "#1a2438", x0: -PARK, x1: 0, z0: 0, z1: PARK, theme: "city" },
+    { name: "🏰 Сказка",       col: "#20102a", col2: "#2e1840", x0: 0, x1: PARK, z0: 0, z1: PARK, theme: "fairy" }
+  ];
+  function zoneAt(x, z) {
+    for (var i = 0; i < ZONES.length; i++) {
+      var zn = ZONES[i];
+      if (x >= zn.x0 && x < zn.x1 && z >= zn.z0 && z < zn.z1) return zn;
+    }
+    return ZONES[3];
+  }
+
   function buildPark() {
     boxes = []; solids = []; bills = []; tickets = []; particles = []; clouds = []; lamps = [];
     gate = { x: 0, z: PARK - 3, w: 22, open: false };
@@ -462,21 +478,21 @@
     for (var i = 1; i < pts.length; i++) ctx.lineTo(pts[i].x, pts[i].y);
     ctx.closePath();
   }
-  function fade(z) { return clamp(1 - (z - 60) / FOG, 0.08, 1); }
+  function fade(z) { return clamp(1 - (z - 20) / 230, 0.015, 1); }   // тьма съедает даль
 
   /* ======================= ОТРИСОВКА ======================= */
   function drawSky() {
     var hy = horizonY();
-    // ===== Крыша-купол закрытого парка =====
+    // ===== ТЁМНЫЙ купол закрытого парка (ночь) =====
     var g = ctx.createLinearGradient(0, 0, 0, Math.max(hy + 40, H*0.6));
-    g.addColorStop(0, "#1a1430");
-    g.addColorStop(0.4, "#3a2a58");
-    g.addColorStop(0.75, "#6a4a78");
-    g.addColorStop(1, "#b88aa0");
+    g.addColorStop(0, "#05030c");
+    g.addColorStop(0.4, "#0c0820");
+    g.addColorStop(0.75, "#1a0f2e");
+    g.addColorStop(1, "#2a1535");
     ctx.fillStyle = g;
     ctx.fillRect(0, 0, W, Math.max(hy + 60, 0));
 
-    // рёбра купола (радиальные балки), уходящие от центра
+    // рёбра купола (радиальные балки)
     var cx = W/2 - Math.sin(cam.yaw) * W * 0.3;
     var cy = hy - H * 0.5;
     var ribs = 26;
@@ -484,7 +500,7 @@
       var a = (i / ribs) * Math.PI * 2 + cam.yaw;
       var ex = W/2 + Math.sin(a) * W * 1.6;
       var ey = hy + 30 - Math.abs(Math.cos(a)) * H * 0.06;
-      ctx.strokeStyle = "rgba(140,160,220,.10)";
+      ctx.strokeStyle = "rgba(90,110,170,.08)";
       ctx.lineWidth = 3;
       ctx.beginPath();
       ctx.moveTo(cx, cy);
@@ -494,34 +510,34 @@
     // кольца купола
     for (var r = 1; r <= 5; r++) {
       var rr = r / 5;
-      ctx.strokeStyle = "rgba(150,170,230,.08)";
+      ctx.strokeStyle = "rgba(100,120,190,.06)";
       ctx.lineWidth = 2;
       ctx.beginPath();
       ctx.ellipse(cx, cy, W * rr * 0.9, H * rr * 0.5, 0, 0, Math.PI * 2);
       ctx.stroke();
     }
 
-    // потолочные фонари (светящиеся полосы)
+    // тусклые потолочные лампы (в темноте еле светят)
     for (var s = -4; s <= 4; s++) {
       var lx = W/2 + s * W * 0.11 - Math.sin(cam.yaw) * W * 0.25;
       var ly = H * 0.06 + Math.abs(s) * H * 0.012;
-      var flick = 0.7 + 0.3 * Math.sin(timeNow * 2 + s);
+      var flick = 0.4 + 0.25 * Math.sin(timeNow * 3 + s * 2);   // мерцают
       ctx.save();
-      ctx.shadowColor = "rgba(255,240,190," + flick + ")";
-      ctx.shadowBlur = 12;
-      ctx.fillStyle = "rgba(255,244,210,.85)";
-      ctx.beginPath(); ctx.ellipse(lx, ly, W*0.05, H*0.012, 0, 0, Math.PI*2); ctx.fill();
+      ctx.shadowColor = "rgba(255,220,150," + flick + ")";
+      ctx.shadowBlur = 16;
+      ctx.fillStyle = "rgba(255,230,180,.5)";
+      ctx.beginPath(); ctx.ellipse(lx, ly, W*0.035, H*0.009, 0, 0, Math.PI*2); ctx.fill();
       ctx.restore();
     }
 
-    // витражи-окна по стенам (сбоку, подсвечены)
+    // цветные витражи-окна тускло светятся в темноте
     for (var wI = -6; wI <= 6; wI++) {
       var wx = W/2 + wI * W * 0.13 - Math.sin(cam.yaw) * W * 0.5;
       var wy = hy - H * 0.22;
       var warm = (wI % 3 === 0);
       var pulse = 0.5 + 0.5 * Math.sin(timeNow * 1.2 + wI);
-      ctx.globalAlpha = 0.28 + pulse * 0.2;
-      ctx.fillStyle = warm ? "#ffd9a0" : "#a8d0ff";
+      ctx.globalAlpha = 0.14 + pulse * 0.12;
+      ctx.fillStyle = warm ? "#ffb060" : "#6090ff";
       ctx.beginPath();
       ctx.moveTo(wx - W*0.045, hy + 10);
       ctx.lineTo(wx - W*0.03, wy);
@@ -535,32 +551,94 @@
   function drawGround() {
     var hy = horizonY();
     var top = Math.max(0, Math.min(H, hy));
-    var g = ctx.createLinearGradient(0, top, 0, H);
-    g.addColorStop(0, "#5f9c48");
-    g.addColorStop(0.35, "#6cae52");
-    g.addColorStop(1, "#4f8a3c");
-    ctx.fillStyle = g;
+    ctx.fillStyle = "#08080c";
     ctx.fillRect(0, top, W, H - top);
 
-    // широкий центральный бульвар (север-юг)
+    // === земля по зонам (только вокруг игрока — для скорости) ===
+    var step = 20;
+    var range = 220;
+    var gx0 = Math.floor((cam.x - range) / step) * step;
+    var gz0 = Math.floor((cam.z - range) / step) * step;
+    for (var gx = gx0; gx < cam.x + range; gx += step) {
+      for (var gz = gz0; gz < cam.z + range; gz += step) {
+        if (gx < -PARK || gx >= PARK || gz < -PARK || gz >= PARK) continue;
+        var zn = zoneAt(gx + step/2, gz + step/2);
+        var q = groundQuad([[gx, gz], [gx+step, gz], [gx+step, gz+step], [gx, gz+step]]);
+        if (!q) continue;
+        var alt = (((gx/step) + (gz/step)) % 2 === 0);
+        ctx.fillStyle = alt ? zn.col : zn.col2;
+        poly(q); ctx.fill();
+      }
+    }
+
+    // === декор каждой зоны ===
+    for (var di = 0; di < ZONES.length; di++) drawZoneDecor(ZONES[di]);
+
+    // центральные дорожки (тусклые)
     for (var z = -PARK; z < PARK; z += 10) {
-      var q = groundQuad([[-12, z], [12, z], [12, z+10], [-12, z+10]]);
-      if (q) { ctx.fillStyle = "#ded4be"; poly(q); ctx.fill(); }
+      var q2 = groundQuad([[-9, z], [9, z], [9, z+10], [-9, z+10]]);
+      if (q2) { ctx.fillStyle = "rgba(60,55,45,.5)"; poly(q2); ctx.fill(); }
     }
-    // поперечный бульвар (запад-восток)
     for (var x = -PARK; x < PARK; x += 10) {
-      var q2 = groundQuad([[x, -8], [x+10, -8], [x+10, 8], [x, 8]]);
-      if (q2) { ctx.fillStyle = "#ded4be"; poly(q2); ctx.fill(); }
+      var q3 = groundQuad([[x, -6], [x+10, -6], [x+10, 6], [x, 6]]);
+      if (q3) { ctx.fillStyle = "rgba(60,55,45,.5)"; poly(q3); ctx.fill(); }
     }
-    // площадь у замка
-    for (var a = 0; a < 60; a++) {
-      var a0 = a/60*Math.PI*2, a1 = (a+1)/60*Math.PI*2;
-      var rr = 55;
-      var q3 = groundQuad([
-        [Math.cos(a0)*rr, Math.sin(a0)*rr - 70], [Math.cos(a1)*rr, Math.sin(a1)*rr - 70],
-        [Math.cos(a1)*(rr+9), Math.sin(a1)*(rr+9) - 70], [Math.cos(a0)*(rr+9), Math.sin(a0)*(rr+9) - 70]
-      ]);
-      if (q3) { ctx.fillStyle = "#e6dcc4"; poly(q3); ctx.fill(); }
+  }
+
+  // декор каждой зоны: звёзды/лианы/неон/свечи
+  function drawZoneDecor(zn) {
+    var t = zn.theme;
+    var count = 26;
+    for (var i = 0; i < count; i++) {
+      var px = zn.x0 + (zn.x1 - zn.x0) * hash(i * 3.7 + zn.x0) ;
+      var pz = zn.z0 + (zn.z1 - zn.z0) * hash(i * 5.1 + zn.z0 * 2) ;
+      if (Math.hypot(px - player.x, pz - player.z) < 8) continue;
+      var d = Math.hypot(px - cam.x, pz - cam.z);
+      if (d > 260) continue;
+      var p = proj(px, 0.1, pz);
+      if (!p) continue;
+      var al = fade(p.z);
+      ctx.globalAlpha = al;
+      if (t === "space") {
+        // звёздочки-наклейки на полу
+        var tw = 0.5 + 0.5 * Math.sin(timeNow * 3 + i);
+        ctx.fillStyle = "rgba(180,210,255," + tw + ")";
+        ctx.beginPath(); ctx.arc(p.x, p.y, Math.max(1, 0.06*p.s), 0, Math.PI*2); ctx.fill();
+      } else if (t === "jungle") {
+        // лианы/кусты
+        var hh = (1.2 + hash(i)*1.5) * p.s;
+        ctx.strokeStyle = "rgba(50,120,50,.8)";
+        ctx.lineWidth = Math.max(1.5, 0.08*p.s);
+        ctx.beginPath(); ctx.moveTo(p.x, p.y); ctx.lineTo(p.x, p.y - hh); ctx.stroke();
+        ctx.fillStyle = "rgba(40,150,60,.7)";
+        ctx.beginPath(); ctx.ellipse(p.x, p.y - hh, hh*0.35, hh*0.22, 0, 0, Math.PI*2); ctx.fill();
+      } else if (t === "city") {
+        // неоновые огоньки на полу
+        var pulse = 0.4 + 0.6 * Math.abs(Math.sin(timeNow * 2 + i));
+        ctx.fillStyle = "rgba(80,220,255," + pulse + ")";
+        ctx.fillRect(p.x - 0.04*p.s, p.y - 0.04*p.s, 0.08*p.s, 0.08*p.s);
+      } else {
+        // свечи/фонарики сказки
+        var fl = 0.5 + 0.5 * Math.sin(timeNow * 4 + i);
+        ctx.fillStyle = "rgba(255,180,240," + fl + ")";
+        ctx.beginPath(); ctx.arc(p.x, p.y - 0.15*p.s, Math.max(1, 0.05*p.s), 0, Math.PI*2); ctx.fill();
+      }
+    }
+    ctx.globalAlpha = 1;
+
+    // светящееся название зоны в воздухе (по центру)
+    var cxz = (zn.x0 + zn.x1) / 2, czz = (zn.z0 + zn.z1) / 2;
+    var lbl = proj(cxz, 16, czz);
+    if (lbl && lbl.z > 10 && lbl.z < 400) {
+      ctx.save();
+      ctx.globalAlpha = fade(lbl.z) * 0.9;
+      ctx.font = "800 " + Math.round(clamp(lbl.s*2, 14, 46)) + "px -apple-system, sans-serif";
+      ctx.textAlign = "center";
+      ctx.fillStyle = zn.col2;
+      ctx.strokeStyle = "rgba(255,255,255,.35)"; ctx.lineWidth = 2;
+      ctx.strokeText(zn.name, lbl.x, lbl.y);
+      ctx.fillText(zn.name, lbl.x, lbl.y);
+      ctx.restore();
     }
   }
   function groundQuad(pts) {
@@ -1010,70 +1088,154 @@
     ctx.restore();
   }
 
-  /* ---------- Монстр ---------- */
+  /* ---------- МОНСТР (по-настоящему страшный) ---------- */
   function drawMonsterBill(p, mon) {
-    var s = p.s * 1.6;
+    var gap = Math.hypot(player.x - mon.x, player.z - mon.z);
+    var loom = 1 + clamp(1 - gap/16, 0, 1) * 0.35;   // раздувается, когда близко
+    var s = p.s * 1.9 * loom;                          // больше прежнего
     ctx.save();
     ctx.translate(p.x, p.y);
+
     var walk = mon.anim;
-    var swing = Math.sin(walk) * 0.35;
-    var legH = 2.0*s, torsoH = 2.4*s, torsoW = 2.2*s, armW = 0.75*s, headS = 1.9*s;
-    var gg = ctx.createRadialGradient(0, -legH - torsoH, 2, 0, -legH - torsoH, 4*s);
-    gg.addColorStop(0, "rgba(180,10,30,.45)");
-    gg.addColorStop(1, "rgba(180,10,30,0)");
+    var legH = 2.1*s, torsoH = 2.6*s, torsoW = 2.1*s, armW = 0.7*s, headS = 2.0*s;
+
+    // === зловещая тёмно-багровая аура ===
+    var gg = ctx.createRadialGradient(0, -legH - torsoH, 2, 0, -legH - torsoH, 5*s);
+    gg.addColorStop(0, "rgba(120,0,10,.55)");
+    gg.addColorStop(0.5, "rgba(80,0,0,.25)");
+    gg.addColorStop(1, "rgba(80,0,0,0)");
     ctx.fillStyle = gg;
-    ctx.beginPath(); ctx.arc(0, -legH - torsoH, 4*s, 0, Math.PI*2); ctx.fill();
-    ctx.globalAlpha = 0.3; ctx.fillStyle = "#000";
-    ctx.beginPath(); ctx.ellipse(0, 0, 1.4*s, 0.3*s, 0, 0, Math.PI*2); ctx.fill();
+    ctx.beginPath(); ctx.arc(0, -legH - torsoH, 5*s, 0, Math.PI*2); ctx.fill();
+
+    // длинная чёрная тень-копна под ногами (тянется в стороны как щупальца)
+    ctx.globalAlpha = 0.55;
+    ctx.fillStyle = "#000";
+    ctx.beginPath(); ctx.ellipse(0, 0.2*s, 2.0*s, 0.5*s, 0, 0, Math.PI*2); ctx.fill();
+    for (var tb = 0; tb < 6; tb++) {
+      var ta = tb/6*Math.PI*2 + Math.sin(timeNow*2 + tb)*0.3;
+      ctx.beginPath();
+      ctx.ellipse(Math.cos(ta)*1.6*s, 0.3*s + Math.sin(ta)*0.4*s, 0.4*s, 0.15*s, ta, 0, Math.PI*2);
+      ctx.fill();
+    }
     ctx.globalAlpha = 1;
-    ctx.fillStyle = "#1a0810";
-    ctx.fillRect(-torsoW*0.42, -legH, torsoW*0.34, legH);
-    ctx.fillRect(torsoW*0.08, -legH, torsoW*0.34, legH);
-    var armSwing = -Math.sin(walk) * 0.8 * s;
-    var reach = Math.max(0, mon.lunge) * 0.8 * s;
-    ctx.fillRect(-torsoW*0.5 - armW, -legH - torsoH*0.92 + armSwing, armW, torsoH*0.95);
-    ctx.fillRect(torsoW*0.5, -legH - torsoH*0.92 - armSwing - reach*0.3, armW + reach, torsoH*0.95);
-    ctx.fillStyle = "#e0d0c0";
-    for (var c = 0; c < 3; c++) {
+
+    // === ноги (тонкие, кривые) ===
+    ctx.strokeStyle = "#0a0508"; ctx.lineWidth = 0.26*s; ctx.lineCap = "round";
+    var legA = Math.sin(walk) * 0.5;
+    ctx.beginPath(); ctx.moveTo(-0.35*s, -legH); ctx.quadraticCurveTo(-0.6*s, -legH*0.5, -0.4*s + legA*s*0.4, 0); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(0.35*s, -legH); ctx.quadraticCurveTo(0.6*s, -legH*0.5, 0.4*s - legA*s*0.4, 0); ctx.stroke();
+
+    // === руки (длинные, с когтями, тянутся к игроку) ===
+    var armA = -Math.sin(walk) * 0.7 * s;
+    ctx.strokeStyle = "#12080c"; ctx.lineWidth = 0.22*s;
+    ctx.beginPath(); ctx.moveTo(-torsoW*0.5, -legH - torsoH*0.85); ctx.quadraticCurveTo(-1.5*s, -legH - torsoH*0.4, -1.2*s, -legH - torsoH*0.9 + armA); ctx.stroke();
+    // правая рука — тянется вперёд
+    var reach = (0.9 + Math.max(0, mon.lunge) * 0.6) * s;
+    ctx.beginPath(); ctx.moveTo(torsoW*0.5, -legH - torsoH*0.85); ctx.quadraticCurveTo(1.4*s, -legH - torsoH*0.5, 1.2*s + reach, -legH - torsoH*0.35); ctx.stroke();
+    // ДЛИННЫЕ КОГТИ
+    ctx.fillStyle = "#d8c8b8";
+    var clawX = 1.2*s + reach, clawY = -legH - torsoH*0.35;
+    for (var c = 0; c < 4; c++) {
       ctx.beginPath();
-      ctx.moveTo(torsoW*0.5 + armW + reach, -legH - torsoH*0.1 + c*0.25*s);
-      ctx.lineTo(torsoW*0.5 + armW + reach + 0.35*s, -legH - torsoH*0.1 + c*0.25*s - 0.12*s);
-      ctx.lineTo(torsoW*0.5 + armW + reach + 0.12*s, -legH - torsoH*0.1 + c*0.25*s + 0.05*s);
+      ctx.moveTo(clawX, clawY + c*0.22*s - 0.2*s);
+      ctx.lineTo(clawX + (0.55 - c*0.08)*s, clawY + c*0.22*s - 0.35*s);
+      ctx.lineTo(clawX + (0.08 - c*0.02)*s, clawY + c*0.22*s - 0.18*s);
       ctx.closePath(); ctx.fill();
     }
+
+    // === торс: худой, бледный, с рёбрами ===
     var tg = ctx.createLinearGradient(0, -legH - torsoH, 0, -legH);
-    tg.addColorStop(0, "#3a1020"); tg.addColorStop(1, "#12060c");
+    tg.addColorStop(0, "#5a5a66");
+    tg.addColorStop(0.5, "#34343e");
+    tg.addColorStop(1, "#16161c");
     ctx.fillStyle = tg;
-    ctx.fillRect(-torsoW/2, -legH - torsoH, torsoW, torsoH);
-    ctx.strokeStyle = "rgba(0,0,0,.4)"; ctx.lineWidth = 1;
-    ctx.strokeRect(-torsoW/2, -legH - torsoH, torsoW, torsoH);
-    var hy = -legH - torsoH - headS;
-    ctx.fillStyle = "#180810";
-    ctx.fillRect(-headS/2, hy, headS, headS);
-    ctx.fillStyle = "#2a0a14";
     ctx.beginPath();
-    ctx.moveTo(-headS*0.4, hy); ctx.lineTo(-headS*0.62, hy - headS*0.5); ctx.lineTo(-headS*0.2, hy + headS*0.1);
+    ctx.moveTo(-torsoW*0.55, -legH - torsoH*0.05);
+    ctx.quadraticCurveTo(-torsoW*0.7, -legH - torsoH*0.9, -torsoW*0.35, -legH - torsoH);
+    ctx.lineTo(torsoW*0.35, -legH - torsoH);
+    ctx.quadraticCurveTo(torsoW*0.7, -legH - torsoH*0.9, torsoW*0.55, -legH - torsoH*0.05);
     ctx.closePath(); ctx.fill();
-    ctx.beginPath();
-    ctx.moveTo(headS*0.4, hy); ctx.lineTo(headS*0.62, hy - headS*0.5); ctx.lineTo(headS*0.2, hy + headS*0.1);
-    ctx.closePath(); ctx.fill();
-    var eg = 0.7 + 0.3*Math.sin(timeNow*9);
-    ctx.save();
-    ctx.shadowColor = "rgba(255,30,30," + eg + ")"; ctx.shadowBlur = 12;
-    ctx.fillStyle = "#ff2a2a";
-    ctx.fillRect(-headS*0.3, hy + headS*0.28, headS*0.2, headS*0.16);
-    ctx.fillRect(headS*0.1, hy + headS*0.28, headS*0.2, headS*0.16);
-    ctx.restore();
-    ctx.fillStyle = "#3a0008";
-    ctx.fillRect(-headS*0.3, hy + headS*0.62, headS*0.6, headS*0.22);
-    ctx.fillStyle = "#e8e0d0";
-    for (var t = 0; t < 5; t++) {
+    // рёбра
+    ctx.strokeStyle = "rgba(0,0,0,.55)"; ctx.lineWidth = Math.max(1, 0.04*s);
+    for (var rb = 0; rb < 5; rb++) {
+      var ry = -legH - torsoH*0.85 + rb * torsoH*0.16;
       ctx.beginPath();
-      ctx.moveTo(-headS*0.28 + t*headS*0.12, hy + headS*0.62);
-      ctx.lineTo(-headS*0.28 + t*headS*0.12 + headS*0.08, hy + headS*0.62);
-      ctx.lineTo(-headS*0.28 + t*headS*0.12 + headS*0.04, hy + headS*0.78);
+      ctx.moveTo(-torsoW*0.4, ry);
+      ctx.quadraticCurveTo(0, ry + 0.12*s, torsoW*0.4, ry);
+      ctx.stroke();
+    }
+
+    // === голова: вытянутый череп ===
+    var hy = -legH - torsoH - headS*0.82;
+    var hg = ctx.createLinearGradient(0, hy - headS*0.5, 0, hy + headS*0.5);
+    hg.addColorStop(0, "#6a6a76");
+    hg.addColorStop(0.6, "#3a3a44");
+    hg.addColorStop(1, "#15151a");
+    ctx.fillStyle = hg;
+    ctx.beginPath();
+    ctx.moveTo(-headS*0.45, hy - headS*0.1);
+    ctx.quadraticCurveTo(-headS*0.5, hy + headS*0.55, 0, hy + headS*0.7);
+    ctx.quadraticCurveTo(headS*0.5, hy + headS*0.55, headS*0.45, hy - headS*0.1);
+    ctx.quadraticCurveTo(headS*0.55, hy - headS*0.6, 0, hy - headS*0.62);
+    ctx.quadraticCurveTo(-headS*0.55, hy - headS*0.6, -headS*0.45, hy - headS*0.1);
+    ctx.closePath(); ctx.fill();
+
+    // рога (костяные, изогнутые)
+    ctx.fillStyle = "#2a2a30";
+    ctx.beginPath();
+    ctx.moveTo(-headS*0.4, hy - headS*0.35);
+    ctx.quadraticCurveTo(-headS*0.95, hy - headS*0.75, -headS*0.7, hy - headS*1.25);
+    ctx.quadraticCurveTo(-headS*0.6, hy - headS*0.8, -headS*0.22, hy - headS*0.5);
+    ctx.closePath(); ctx.fill();
+    ctx.beginPath();
+    ctx.moveTo(headS*0.4, hy - headS*0.35);
+    ctx.quadraticCurveTo(headS*0.95, hy - headS*0.75, headS*0.7, hy - headS*1.25);
+    ctx.quadraticCurveTo(headS*0.6, hy - headS*0.8, headS*0.22, hy - headS*0.5);
+    ctx.closePath(); ctx.fill();
+
+    // === ЧЁРНЫЕ ГЛАЗНИЦЫ + светящиеся красные зрачки ===
+    ctx.fillStyle = "#000";
+    ctx.beginPath(); ctx.ellipse(-headS*0.2, hy - headS*0.02, headS*0.19, headS*0.26, -0.2, 0, Math.PI*2); ctx.fill();
+    ctx.beginPath(); ctx.ellipse(headS*0.2, hy - headS*0.02, headS*0.19, headS*0.26, 0.2, 0, Math.PI*2); ctx.fill();
+    var eg = 0.65 + 0.35*Math.sin(timeNow*9) + clamp(1 - gap/25, 0, 1)*0.4;
+    ctx.save();
+    ctx.shadowColor = "rgba(255,10,10," + Math.min(1, eg) + ")";
+    ctx.shadowBlur = 22;
+    ctx.fillStyle = "#ff1010";
+    ctx.beginPath(); ctx.arc(-headS*0.2, hy, headS*0.075, 0, Math.PI*2); ctx.fill();
+    ctx.beginPath(); ctx.arc(headS*0.2, hy, headS*0.075, 0, Math.PI*2); ctx.fill();
+    ctx.restore();
+
+    // === пасть, усеянная кривыми зубами ===
+    ctx.fillStyle = "#1a0004";
+    ctx.beginPath();
+    ctx.ellipse(0, hy + headS*0.42, headS*0.34, headS*0.2, 0, 0, Math.PI*2);
+    ctx.fill();
+    ctx.fillStyle = "#e8e0d0";
+    for (var t = 0; t < 7; t++) {
+      var tx = -headS*0.3 + t*headS*0.1;
+      ctx.beginPath();
+      ctx.moveTo(tx, hy + headS*0.28);
+      ctx.lineTo(tx + headS*0.06, hy + headS*0.28);
+      ctx.lineTo(tx + headS*0.03, hy + headS*0.44 + (t%2)*headS*0.08);
+      ctx.closePath(); ctx.fill();
+      // нижние зубы
+      ctx.beginPath();
+      ctx.moveTo(tx, hy + headS*0.56);
+      ctx.lineTo(tx + headS*0.06, hy + headS*0.56);
+      ctx.lineTo(tx + headS*0.03, hy + headS*0.42 - (t%2)*headS*0.06);
       ctx.closePath(); ctx.fill();
     }
+
+    // === когда близко — белые всполохи ярости ===
+    if (gap < 12) {
+      ctx.globalAlpha = clamp(1 - gap/12, 0, 1) * 0.6;
+      ctx.fillStyle = "#fff";
+      ctx.beginPath(); ctx.arc(-headS*0.2, hy - headS*0.02, headS*0.09, 0, Math.PI*2); ctx.fill();
+      ctx.beginPath(); ctx.arc(headS*0.2, hy - headS*0.02, headS*0.09, 0, Math.PI*2); ctx.fill();
+      ctx.globalAlpha = 1;
+    }
+
     ctx.restore();
   }
 
@@ -1220,11 +1382,13 @@
   }
 
   function zoneName(x, z) {
-    if (z < -60) return "🏰 Замок Дракона";
-    if (x < -80) return "🎡 Колесо обозрения";
-    if (x > 80) return "🎠 Территория горок";
-    if (z > 80) return "🎢 Аллея аттракционов";
-    return "🎠 Центральная площадь";
+    var zn = zoneAt(x, z);
+    // плюс уточнение по конкретному месту
+    if (z < -60 && x < 0) return "🚀 Космос · Замок-ракета";
+    if (z < -60 && x >= 0) return "🌿 Джунгли · водопад";
+    if (x < -80 && z > 0) return "🤖 Город роботов · колесо";
+    if (x > 80 && z > 0) return "🏰 Сказка · карусель";
+    return zn.name;
   }
 
   /* ======================= КАТАНИЕ ======================= */
